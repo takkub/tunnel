@@ -40,7 +40,7 @@ Script จะทำให้อัตโนมัติ:
 - ✅ ดึง Tunnel ID ที่ gen มาใหม่
 - ✅ Copy credentials ที่ตรงกับ Tunnel ID
 - ✅ สร้าง config.yml ด้วย Tunnel ID ที่ถูกต้อง
-- ✅ สร้าง CNAME: `{domain}` → `{tunnelId}.cfargotunnel.com`
+- ✅ สร้าง DNS route: `{domain}` → Tunnel
 - ✅ สร้าง docker-compose file
 
 📖 **อ่านเพิ่มเติม:** [SETUP-GUIDE.md](./SETUP-GUIDE.md) - อธิบายการทำงานแบบละเอียด

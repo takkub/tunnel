@@ -8,7 +8,7 @@
 **วิธีแก้:**
 - ✅ รอคำสั่ง `tunnel create` เสร็จก่อน
 - ✅ ดึง Tunnel ID จาก output ที่ gen มา
-- ✅ ใช้ Tunnel ID นั้นสร้าง CNAME: `{domain}` → `{tunnelId}.cfargotunnel.com`
+- ✅ ใช้ Tunnel ID นั้นสร้าง DNS route: `{domain}` → Tunnel
 
 ### 2️⃣ ปัญหาลบทั้งหมด
 **สาเหตุ:** คำสั่ง `npm run delete` ลบทุกอย่าง ไม่สามารถเก็บบางอย่างไว้ได้
@@ -117,7 +117,7 @@ npm run setup
 3. **ดึง Tunnel ID จาก output**
 4. คัดลอก `{tunnelId}.json` ที่ถูกต้อง
 5. สร้าง config.yml ด้วย tunnel ID ที่ถูกต้อง
-6. **สร้าง CNAME: `{domain}` → `{tunnelId}.cfargotunnel.com`**
+6. **สร้าง DNS route: `{domain}` → Tunnel**
 7. สร้าง docker-compose file
 
 **ผลลัพธ์:**
@@ -126,7 +126,6 @@ Tunnel Information:
   Name:      tak
   ID:        b8b6a8f8-e2fa-4c9b-9282-398e82b0a214
   Domain:    tak.sabuytube.xyz
-  CNAME:     b8b6a8f8-e2fa-4c9b-9282-398e82b0a214.cfargotunnel.com
   Local:     http://localhost:3000
 ```
 
@@ -190,9 +189,9 @@ npm run setup
 ls tunnels/tak/
 # ควรเห็น: {tunnelId}.json, cert.pem, config.yml
 
-# ตรวจสอบ CNAME บน Cloudflare Dashboard
+# ตรวจสอบ DNS บน Cloudflare Dashboard
 # DNS → Records → หา subdomain ที่สร้าง
-# Target ควรเป็น: {tunnelId}.cfargotunnel.com
+# Target ควรเป็น Tunnel ที่สร้าง
 ```
 
 ### ทดสอบ Delete

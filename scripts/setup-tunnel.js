@@ -227,15 +227,15 @@ ingress:
 
   // Setup DNS
   console.log('\n[6/6] Setting up DNS...');
-  console.log(`Creating CNAME: ${domain} -> ${tunnelId}.cfargotunnel.com`);
+  console.log(`Setting up DNS route for: ${domain}`);
   const dnsResult = exec(`${cmd} tunnel route dns ${tunnelId} ${domain}`, 'Setup DNS route', true);
   if (dnsResult) {
     console.log(`✓ DNS route created`);
     console.log(`  Domain: ${domain}`);
-    console.log(`  Target: ${tunnelId}.cfargotunnel.com`);
+    console.log(`  Tunnel: ${tunnelName}`);
   } else {
-    console.log('⚠ DNS route setup may have failed, but you can add it manually:');
-    console.log(`  CNAME: ${domain} -> ${tunnelId}.cfargotunnel.com`);
+    console.log('⚠ DNS route setup may have failed, but you can add it manually');
+    console.log(`  Run: cloudflared tunnel route dns ${tunnelId} ${domain}`);
   }
 
   // Create docker-compose file
@@ -264,7 +264,6 @@ services:
   console.log(`  Name:      ${tunnelName}`);
   console.log(`  ID:        ${tunnelId}`);
   console.log(`  Domain:    ${domain}`);
-  console.log(`  CNAME:     ${tunnelId}.cfargotunnel.com`);
   console.log(`  Local:     http://localhost:${localPort}`);
   console.log(`\nTo start the tunnel, run:`);
   console.log(`  docker-compose -f ${dockerComposeFile} up -d`);

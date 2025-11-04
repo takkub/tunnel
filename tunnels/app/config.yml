@@ -1,0 +1,7 @@
+tunnel: 8bb426a6-5a24-4044-b4ec-bb4690be2bcd
+credentials-file: /etc/cloudflared/8bb426a6-5a24-4044-b4ec-bb4690be2bcd.json
+
+ingress:
+  - hostname: app.sabuytube.xyz
+    service: http://host.docker.internal:3000
+  - service: http_status:404

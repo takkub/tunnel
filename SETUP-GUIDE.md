@@ -11,11 +11,11 @@
 
 ### ✅ ตอนนี้ (แก้ไขแล้ว)
 1. **รันคำสั่ง `tunnel create` และรอให้เสร็จสมบูรณ์**
-2. **ดึง Tunnel ID จากผลลัพธ์ที่ gen มา** (แบบ real-time)
+2. **ดึง Tunnel ID จาก output ที่ gen มา** (แบบ real-time)
 3. **ใช้ Tunnel ID นั้นไปสร้าง:**
    - คัดลอกไฟล์ `{tunnelId}.json` ที่ถูกต้อง
    - สร้าง `config.yml` ด้วย tunnel ID ที่ถูกต้อง
-   - **สร้าง CNAME ที่ชี้ไปที่ `{tunnelId}.cfargotunnel.com`**
+   - **สร้าง DNS route: `{domain}` ไปยัง Tunnel**
 
 ## วิธีใช้งาน
 
@@ -51,10 +51,10 @@ npm run setup
   Domain: tak.sabuytube.xyz
 
 [6/6] Setting up DNS...
-Creating CNAME: tak.sabuytube.xyz -> b8b6a8f8-e2fa-4c9b-9282-398e82b0a214.cfargotunnel.com
+Setting up DNS route for: tak.sabuytube.xyz
 ✓ DNS route created
   Domain: tak.sabuytube.xyz
-  Target: b8b6a8f8-e2fa-4c9b-9282-398e82b0a214.cfargotunnel.com
+  Tunnel: tak
 
 ==================================================
 ✓ Setup Complete!
@@ -64,7 +64,6 @@ Tunnel Information:
   Name:      tak
   ID:        b8b6a8f8-e2fa-4c9b-9282-398e82b0a214
   Domain:    tak.sabuytube.xyz
-  CNAME:     b8b6a8f8-e2fa-4c9b-9282-398e82b0a214.cfargotunnel.com
   Local:     http://localhost:3000
 ```
 
@@ -77,7 +76,7 @@ Tunnel Information:
 
 ### 2. **CNAME ถูกต้อง**
 - สร้างด้วย tunnel ID ที่เพิ่ง gen มา
-- ชี้ไปที่ `{tunnelId}.cfargotunnel.com`
+- ชี้ไปที่ Tunnel ที่ถูกต้อง
 - ไม่ซ้ำกับ tunnel เก่า
 
 ### 3. **Config ไฟล์ถูกต้อง**
@@ -109,7 +108,7 @@ docker-compose-cloudflare-tak.yml               ← Docker compose file
 3. ไปที่ **DNS** → **Records**
 4. จะเห็นระเบียน CNAME:
    - **Name:** tak (หรือ subdomain ที่ระบุ)
-   - **Target:** `b8b6a8f8-e2fa-4c9b-9282-398e82b0a214.cfargotunnel.com`
+   - **Target:** Tunnel ที่สร้าง
    - **Proxy status:** Proxied (🟠 Orange Cloud)
 
 ## เริ่มใช้งาน Tunnel
@@ -146,9 +145,9 @@ docker logs cloudflared-tunnel-tak -f
 สคริปต์จะหาไฟล์ JSON ล่าสุดใน `.cloudflared` และใช้แทน แล้วอัปเดต tunnel ID
 
 ### ถ้า DNS route สร้างไม่สำเร็จ
-สคริปต์จะแสดงวิธีสร้าง CNAME ด้วยตัวเอง:
+สคริปต์จะแสดงวิธีสร้างด้วยตัวเอง:
 ```
-CNAME: {domain} -> {tunnelId}.cfargotunnel.com
+Run: cloudflared tunnel route dns <tunnel-id> <domain>
 ```
 
 ---

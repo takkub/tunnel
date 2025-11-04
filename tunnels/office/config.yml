@@ -1,0 +1,7 @@
+tunnel: ed61a4d3-871d-4959-949c-cdbe24215b85
+credentials-file: /etc/cloudflared/ed61a4d3-871d-4959-949c-cdbe24215b85.json
+
+ingress:
+  - hostname: office.sabuytube.xyz
+    service: http://host.docker.internal:3000
+  - service: http_status:404
