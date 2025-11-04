@@ -1,271 +1,271 @@
-# Cloudflare Tunnel Manager
+# 🚇 Cloudflare Tunnel Manager
 
-## 📋 ข้อกำหนดเบื้องต้น
+ระบบจัดการ Cloudflare Tunnels แบบ Interactive - ใช้งานง่าย ไม่ต้องจำคำสั่ง
 
-ก่อนเริ่มใช้งาน ต้องติดตั้งโปรแกรมเหล่านี้ก่อน:
-- ✅ **Cloudflared** - Cloudflare Tunnel client
-- ✅ **Docker Desktop** - สำหรับรัน containers
+---
 
-### ตรวจสอบความพร้อม
+## 🚀 Quick Start
 
+### 1. ตรวจสอบความพร้อม
 ```bash
 npm run check
 ```
 
-ถ้ายังไม่ได้ติดตั้ง ดูวิธีติดตั้งที่: **[INSTALL.md](INSTALL.md)** 📦
+ต้องมี: **Cloudflared** + **Docker Desktop**
 
----
+ถ้ายังไม่มี → ดู [การติดตั้ง](#การติดตั้ง)
 
-## 🚀 Quick Start (ติดตั้งครั้งแรก)
-
-### ขั้นตอนที่ 1: Login เข้า Cloudflare
+### 2. Login Cloudflare
 ```bash
 npm run login
 ```
+Browser จะเปิด → Login → Authorize
 
-### ขั้นตอนที่ 2: สร้าง Tunnel (Interactive Setup)
+**หมายเหตุ:** ถ้าเจอ error `existing certificate` = login ไว้แล้ว (ข้ามได้)
+
+### 3. สร้าง Tunnel
 ```bash
 npm run setup
 ```
 
-คุณจะถูกถามคำถามต่อไปนี้:
-- **Tunnel name**: ชื่อ tunnel (เช่น `app-tunnel`, `office-tunnel`)
-- **Domain**: โดเมนที่ต้องการ (เช่น `app.sabuytube.xyz`)
-- **Local port**: พอร์ตของเซิร์ฟเวอร์ local (default: 3000)
-- **Folder name**: ชื่อโฟลเดอร์สำหรับเก็บ config (เช่น `app`, `office`)
+ตอบคำถาม:
+- **Tunnel name:** `app-tunnel`
+- **Domain:** `app.sabuytube.xyz`
+- **Local port:** `3000`
+- **Folder name:** `app`
+- **Continue:** `yes`
 
-สคริปต์จะทำทุกอย่างให้อัตโนมัติ:
-- ✅ สร้าง Cloudflare tunnel
-- ✅ คัดลอก credentials และ cert.pem
+Script จะทำให้อัตโนมัติ:
+- ✅ สร้าง tunnel
+- ✅ Copy credentials
 - ✅ สร้าง config.yml
-- ✅ ตั้งค่า DNS route
-- ✅ สร้างไฟล์ docker-compose
+- ✅ ตั้งค่า DNS
+- ✅ สร้าง docker-compose file
 
-### ขั้นตอนที่ 3: เริ่มใช้งาน
+### 4. เริ่มใช้งาน
 ```bash
 npm start
+```
+
+เสร็จแล้ว! เปิด browser ไปที่ `https://app.sabuytube.xyz` 🎉
+
+---
+
+## 💡 คำสั่งที่ใช้บ่อย
+
+### ใช้งานทั่วไป
+```bash
+npm start                    # เริ่มทั้งหมด
+npm stop                     # หยุดทั้งหมด
+npm run status               # เช็คสถานะ
+```
+
+### จัดการ Tunnel
+```bash
+npm run setup                # สร้าง tunnel ใหม่
+npm run delete               # ลบ tunnel (interactive)
+npm run tunnel:app:logs      # ดู logs (Ctrl+C ออก)
+npm run tunnel:app:restart   # Restart tunnel
+```
+
+### แยกตาม Tunnel
+```bash
+npm run tunnel:app:up        # เริ่ม App tunnel
+npm run tunnel:app:down      # หยุด App tunnel
+npm run tunnel:office:up     # เริ่ม Office tunnel
+npm run tunnel:office:down   # หยุด Office tunnel
 ```
 
 ---
 
-## 💡 วิธีใช้งานประจำวัน
+## 🔧 การติดตั้ง
 
-### เริ่ม/หยุด Tunnels
+### Windows (PowerShell - Run as Admin)
 
+**1. ติดตั้ง Cloudflared**
 ```bash
-# เริ่มทั้งหมด (แนะนำ ⭐)
-npm start
-
-# หยุดทั้งหมด
-npm stop
-
-# เริ่มแค่ App tunnel
-npm run tunnel:app:up
-
-# เริ่มแค่ Office tunnel
-npm run tunnel:office:up
-
-# หยุดแค่ App tunnel
-npm run tunnel:app:down
-
-# หยุดแค่ Office tunnel
-npm run tunnel:office:down
+winget install Cloudflare.cloudflared
 ```
 
-### Restart Tunnels
+**2. ติดตั้ง Docker Desktop**
+- ดาวน์โหลด: https://www.docker.com/products/docker-desktop/
+- ติดตั้งและเปิดโปรแกรม
 
+**3. ปิด Terminal แล้วเปิดใหม่** (สำคัญ!)
+
+**4. ตรวจสอบ**
 ```bash
-# Restart ทั้งหมด
-npm run tunnel:all:restart
-
-# Restart แค่ App
-npm run tunnel:app:restart
-
-# Restart แค่ Office
-npm run tunnel:office:restart
+npm run check
 ```
 
-### ดู Logs
+ควรเห็น:
+```
+✅ Cloudflared is installed
+✅ Docker is installed
+✅ Docker Compose is installed
+```
 
+---
+
+## 🎯 Setup Wizard (npm run setup)
+
+Interactive wizard จะถาม 4 คำถาม:
+
+| คำถาม | คำอธิบาย | ตัวอย่าง |
+|-------|----------|----------|
+| **Tunnel name** | ชื่อ tunnel ใน Cloudflare | `app-tunnel`, `office-tunnel` |
+| **Domain** | โดเมนที่ต้องการใช้ | `app.sabuytube.xyz` |
+| **Local port** | พอร์ตของ web server | `3000`, `8080`, `5000` |
+| **Folder name** | ชื่อโฟลเดอร์เก็บ config | `app`, `office` |
+
+หลังจากนั้นจะทำให้อัตโนมัติทั้งหมด!
+
+---
+
+## 📁 โครงสร้างโปรเจค
+
+```
+tunnel/
+├── package.json                          # NPM scripts
+├── README.md                             # คู่มือนี้
+├── scripts/
+│   ├── setup-tunnel.js                   # Setup wizard
+│   ├── delete-tunnel.js                  # Delete wizard
+│   ├── status.js                         # Status viewer
+│   └── check-requirements.js             # Requirements checker
+├── cloudflared/
+│   ├── app/
+│   │   ├── config.yml                    # ✅ Config (in git)
+│   │   ├── cert.pem                      # ❌ Credentials (gitignored)
+│   │   └── *.json                        # ❌ Credentials (gitignored)
+│   └── office/
+│       └── ...
+└── docker-compose-cloudflare-*.yml       # Docker Compose files
+```
+
+**สำคัญ:** ไฟล์ `.pem` และ `.json` ไม่ขึ้น git (ปลอดภัย)
+
+---
+
+## 🔍 แก้ไขปัญหา
+
+### `cloudflared is not recognized`
 ```bash
-# ดู App logs (กด Ctrl+C เพื่อออก)
+# ติดตั้ง
+winget install Cloudflare.cloudflared
+
+# ปิด terminal แล้วเปิดใหม่
+# ตรวจสอบ
+npm run check
+```
+
+### `Docker is not running`
+```bash
+# เปิด Docker Desktop
+# รอให้ status เป็น "Running"
+docker ps
+```
+
+### Tunnel ไม่ทำงาน
+```bash
+# ดู logs
 npm run tunnel:app:logs
 
-# ดู Office logs (กด Ctrl+C เพื่อออก)
-npm run tunnel:office:logs
-```
-
-### เช็คสถานะ
-
-```bash
-# ดูสถานะ tunnels ที่กำลังรัน + list ทุก tunnels
-npm run status
-```
-
-### ลบ Tunnels (Interactive)
-
-```bash
-# ลบ tunnel แบบ interactive
-npm run delete
-```
-
-คุณจะถูกถาม:
-- เลือก tunnel ที่ต้องการลบ
-- ยืนยันการลบด้วยคำว่า "DELETE"
-
----
-
-## 📋 รายละเอียด NPM Scripts ทั้งหมด
-
-### 🔧 Setup & Management Scripts
-```bash
-npm run login    # Login เข้า Cloudflare (ครั้งแรก)
-npm run setup    # สร้าง tunnel ใหม่ (interactive)
-npm run delete   # ลบ tunnel (interactive)
-npm run status   # ดูสถานะทั้งหมด
-```
-
-### 🚀 Start/Stop Scripts (ใช้งานประจำ)
-```bash
-npm start                  # เริ่มทั้งหมด ⭐
-npm stop                   # หยุดทั้งหมด
-npm run tunnel:all:up      # เริ่มทั้งสอง tunnels
-npm run tunnel:all:down    # หยุดทั้งสอง tunnels
-npm run tunnel:all:restart # Restart ทั้งสอง tunnels
-npm run tunnel:app:up      # เริ่ม App tunnel
-npm run tunnel:app:down    # หยุด App tunnel
-npm run tunnel:app:restart # Restart App tunnel
-npm run tunnel:office:up   # เริ่ม Office tunnel
-npm run tunnel:office:down # หยุด Office tunnel
-npm run tunnel:office:restart # Restart Office tunnel
-```
-
-### 📊 Monitor Scripts
-```bash
-npm run tunnel:app:logs    # ดู App tunnel logs
-npm run tunnel:office:logs # ดู Office tunnel logs
-```
-
----
-
-## 🎯 ตัวอย่างการใช้งาน
-
-### ครั้งแรก (Setup App Tunnel)
-```bash
-# 1. Login
-npm run login
-
-# 2. สร้าง App tunnel
-npm run setup
-# Enter tunnel name: app-tunnel
-# Enter domain: app.sabuytube.xyz
-# Enter local port: 3000
-# Enter folder name: app
-# Continue? yes
-
-# 3. เริ่มใช้งาน
-npm start
-```
-
-### สร้าง Tunnel ตัวที่สอง (Office)
-```bash
-npm run setup
-# Enter tunnel name: office-tunnel
-# Enter domain: office.sabuytube.xyz
-# Enter local port: 3000
-# Enter folder name: office
-# Continue? yes
-
-# Restart เพื่อรัน tunnel ใหม่ด้วย
-npm run tunnel:office:up
-```
-
-### การใช้งานปกติ
-```bash
-# เริ่ม tunnels
-npm start
-
-# เช็คสถานะ
-npm run status
-
-# ดู logs ถ้ามีปัญหา
-npm run tunnel:app:logs
-
-# หยุด tunnels
-npm stop
-```
-
-### แก้ไขปัญหา
-```bash
-# Restart ถ้ามีปัญหา
-npm run tunnel:all:restart
-
-# หรือ restart ทีละตัว
+# Restart
 npm run tunnel:app:restart
-npm run tunnel:office:restart
-```
 
-### ลบ Tunnel ที่ไม่ใช้
-```bash
+# ถ้ายังไม่ได้ → สร้างใหม่
 npm run delete
-# เลือก tunnel ที่ต้องการลบ
-# พิมพ์ DELETE เพื่อยืนยัน
+npm run setup
+npm start
+```
+
+### `existing certificate` เมื่อ login
+- **ไม่ใช่ error!** คุณ login ไว้แล้ว
+- ข้ามไปขั้นตอน `npm run setup` เลย
+
+---
+
+## 📚 คำสั่งทั้งหมด
+
+### Setup
+| คำสั่ง | คำอธิบาย |
+|--------|----------|
+| `npm run check` | ตรวจสอบความพร้อม |
+| `npm run login` | Login Cloudflare |
+| `npm run setup` | สร้าง tunnel ใหม่ (interactive) |
+| `npm run delete` | ลบ tunnel (interactive) |
+| `npm run status` | ดูสถานะทั้งหมด |
+
+### Start/Stop
+| คำสั่ง | คำอธิบาย |
+|--------|----------|
+| `npm start` | เริ่มทั้งหมด |
+| `npm stop` | หยุดทั้งหมด |
+| `npm run tunnel:all:restart` | Restart ทั้งหมด |
+| `npm run tunnel:app:up` | เริ่ม App tunnel |
+| `npm run tunnel:app:down` | หยุด App tunnel |
+| `npm run tunnel:app:restart` | Restart App tunnel |
+| `npm run tunnel:app:logs` | ดู App logs |
+
+---
+
+## 🔒 Security
+
+### ✅ ปลอดภัย
+- Credentials (`.pem`, `.json`) ถูก gitignore แล้ว
+- แค่ `config.yml` ขึ้น git (ไม่มี secrets)
+
+### ✅ ตรวจสอบก่อน commit
+```bash
+git status              # ดูไฟล์ที่จะ commit
+git status --ignored    # ดูไฟล์ที่ถูก ignore
 ```
 
 ---
 
-## ⚙️ Configuration
+## 💡 ตัวอย่าง
 
-### Tunnels Configuration
+### สร้าง Tunnel แรก
+```bash
+npm run check           # ตรวจสอบ
+npm run login           # Login (ถ้ายังไม่เคย)
+npm run setup           # สร้าง tunnel
+npm start               # เริ่มใช้งาน
+npm run status          # เช็คสถานะ
+```
 
-- **App Tunnel**: app.sabuytube.xyz → http://host.docker.internal:3000
-- **Office Tunnel**: office.sabuytube.xyz → http://host.docker.internal:3000
+### เพิ่ม Tunnel ใหม่
+```bash
+npm run setup           # สร้างอีกตัว
+npm start               # เริ่มทั้งหมด
+```
 
-### Config Files
-
-- `cloudflared/app/config.yml` - App tunnel configuration
-- `cloudflared/office/config.yml` - Office tunnel configuration
-- `docker-compose-cloudflare-app.yml` - App Docker Compose
-- `docker-compose-cloudflare-office.yml` - Office Docker Compose
-
-### Scripts
-
-- `scripts/setup-tunnel.js` - Interactive setup wizard
-- `scripts/delete-tunnel.js` - Interactive delete wizard
-- `scripts/status.js` - Status viewer
-
----
-
-## 📝 Notes
-
-- ✅ **Interactive Setup**: ใช้ `npm run setup` แล้วตอบคำถาม - ง่ายมาก!
-- ✅ **No Batch Files**: ไม่มีไฟล์ .bat อีกต่อไป ใช้แค่ npm scripts
-- ✅ **Step by Step**: ทุก command จะแสดงขั้นตอนชัดเจน
-- ✅ **Safe Delete**: การลบต้องยืนยันด้วยคำว่า "DELETE"
-- ใช้ `npm start` และ `npm stop` สำหรับการใช้งานปกติ
-- Tunnels จะรันใน Docker containers
-- ใช้ `Ctrl+C` เพื่อออกจากการดู logs
-- ถ้ามีปัญหา ให้ลอง restart ด้วย `npm run tunnel:all:restart`
+### Troubleshooting
+```bash
+npm run status                  # เช็คสถานะ
+npm run tunnel:app:logs         # ดู error
+npm run tunnel:app:restart      # ลอง restart
+```
 
 ---
 
-## 🎬 Demo Flow
+## 📖 เอกสารเพิ่มเติม
+
+- **QUICK-START.md** - คู่มือสั้นๆ
+- **INSTALL.md** - คู่มือติดตั้งละเอียด
+- **START-HERE.md** - จุดเริ่มต้น
+
+---
+
+## 🎉 เท่านี้ก็พร้อมใช้งาน!
 
 ```bash
-# ครั้งแรก
-npm run login        # Login Cloudflare
-npm run setup        # ตั้งค่า tunnel แรก (ตอบคำถาม)
-npm run setup        # ตั้งค่า tunnel ที่สอง (ตอบคำถาม)
-npm start           # เริ่มใช้งาน!
-
-# ใช้งานประจำ
-npm start           # เริ่ม
-npm run status      # เช็ค
-npm stop            # หยุด
-
-# จัดการ
-npm run delete      # ลบ tunnel ที่ไม่ใช้
+npm run check    # 1. ตรวจสอบ
+npm run login    # 2. Login
+npm run setup    # 3. สร้าง
+npm start        # 4. เริ่ม!
 ```
 
-เท่านี้ก็พร้อมใช้งาน! 🎉
+**Happy Tunneling! 🚀**
 

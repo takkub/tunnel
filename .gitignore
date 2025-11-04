@@ -27,8 +27,6 @@ package-lock.json
 .DS_Store
 Thumbs.db
 desktop.ini
-# Cloudflare Credentials - IMPORTANT!
-
 *.pem
 # Keep config files
 !cloudflared/**/config.yml
