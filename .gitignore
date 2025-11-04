@@ -28,8 +28,7 @@ package-lock.json
 Thumbs.db
 desktop.ini
 # Cloudflare Credentials - IMPORTANT!
-cloudflared/**/*.json
-cloudflared/**/cert.pem
+
 *.pem
 # Keep config files
 !cloudflared/**/config.yml
