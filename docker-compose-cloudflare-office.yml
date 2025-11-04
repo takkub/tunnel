@@ -7,6 +7,6 @@ services:
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
     volumes:
-      - ./cloudflared/office:/etc/cloudflared
+      - ./tunnels/office:/etc/cloudflared
     extra_hosts:
       - "host.docker.internal:host-gateway"

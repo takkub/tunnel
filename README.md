@@ -36,11 +36,14 @@ npm run setup
 - **Continue:** `yes`
 
 Script จะทำให้อัตโนมัติ:
-- ✅ สร้าง tunnel
-- ✅ Copy credentials
-- ✅ สร้าง config.yml
-- ✅ ตั้งค่า DNS
+- ✅ สร้าง tunnel (รอให้เสร็จก่อน)
+- ✅ ดึง Tunnel ID ที่ gen มาใหม่
+- ✅ Copy credentials ที่ตรงกับ Tunnel ID
+- ✅ สร้าง config.yml ด้วย Tunnel ID ที่ถูกต้อง
+- ✅ สร้าง CNAME: `{domain}` → `{tunnelId}.cfargotunnel.com`
 - ✅ สร้าง docker-compose file
+
+📖 **อ่านเพิ่มเติม:** [SETUP-GUIDE.md](./SETUP-GUIDE.md) - อธิบายการทำงานแบบละเอียด
 
 ### 4. เริ่มใช้งาน
 ```bash
@@ -63,7 +66,10 @@ npm run status               # เช็คสถานะ
 ### จัดการ Tunnel
 ```bash
 npm run setup                # สร้าง tunnel ใหม่
-npm run delete               # ลบ tunnel (interactive)
+npm run delete               # ลบ tunnel (ถามก่อน)
+npm run delete:app           # ลบ App tunnel โดยตรง
+npm run delete:home          # ลบ Home tunnel โดยตรง
+npm run delete:office        # ลบ Office tunnel โดยตรง
 npm run tunnel:app:logs      # ดู logs (Ctrl+C ออก)
 npm run tunnel:app:restart   # Restart tunnel
 ```
@@ -133,7 +139,7 @@ tunnel/
 │   ├── delete-tunnel.js                  # Delete wizard
 │   ├── status.js                         # Status viewer
 │   └── check-requirements.js             # Requirements checker
-├── cloudflared/
+├── tunnels/
 │   ├── app/
 │   │   ├── config.yml                    # ✅ Config (in git)
 │   │   ├── cert.pem                      # ❌ Credentials (gitignored)
@@ -174,11 +180,13 @@ npm run tunnel:app:logs
 # Restart
 npm run tunnel:app:restart
 
-# ถ้ายังไม่ได้ → สร้างใหม่
-npm run delete
+# ถ้ายังไม่ได้ → ลบแล้วสร้างใหม่
+npm run delete        # เลือกว่าจะลบอะไรบ้าง
 npm run setup
 npm start
 ```
+
+**หมายเหตุ:** คำสั่ง `delete` จะถามก่อนว่าจะลบอะไรบ้าง (DNS, Tunnel, Config, Docker Compose)
 
 ### `existing certificate` เมื่อ login
 - **ไม่ใช่ error!** คุณ login ไว้แล้ว
@@ -194,8 +202,14 @@ npm start
 | `npm run check` | ตรวจสอบความพร้อม |
 | `npm run login` | Login Cloudflare |
 | `npm run setup` | สร้าง tunnel ใหม่ (interactive) |
-| `npm run delete` | ลบ tunnel (interactive) |
+| `npm run cleanup <name>` | 🗑️ ลบทุกอย่างในคำสั่งเดียว (แนะนำ) |
+| `npm run delete:tak` | ลบ tak tunnel (เลือกได้ว่าจะลบอะไร) |
+| `npm run quick-delete:tak` | ⚡ ลบ tunnel จาก Cloudflare เท่านั้น |
 | `npm run status` | ดูสถานะทั้งหมด |
+
+🗑️ **Cleanup (แนะนำ):** `npm run cleanup tak` - ลบทุกอย่างอัตโนมัติในคำสั่งเดียว  
+📖 **คู่มือ Delete:** [DELETE-GUIDE.md](./DELETE-GUIDE.md) - วิธีลบแบบเลือกได้  
+⚠️ **แก้ปัญหา:** [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - ถ้าลบ tunnel ไม่ได้
 
 ### Start/Stop
 | คำสั่ง | คำอธิบาย |
@@ -268,4 +282,3 @@ npm start        # 4. เริ่ม!
 ```
 
 **Happy Tunneling! 🚀**
-

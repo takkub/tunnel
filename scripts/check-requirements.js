@@ -21,32 +21,43 @@ const dockerComposeInstalled = checkCommand('docker-compose', 'Docker Compose');
 
 console.log('\n' + '='.repeat(50));
 
-if (!cloudflaredInstalled) {
-  console.log('\n📦 How to install Cloudflared:\n');
+if (!cloudflaredInstalled && !dockerInstalled) {
+  console.log('\n❌ You need either Cloudflared OR Docker to continue.\n');
+  console.log('📦 Option 1 - Install Cloudflared:\n');
   console.log('Windows (using winget):');
   console.log('  winget install Cloudflare.cloudflared\n');
   console.log('Or download from:');
   console.log('  https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/\n');
-  console.log('After installation, restart your terminal and run:');
-  console.log('  npm run check\n');
-}
-
-if (!dockerInstalled) {
-  console.log('\n🐳 How to install Docker:\n');
+  console.log('🐳 Option 2 - Install Docker (Recommended):\n');
   console.log('Download Docker Desktop from:');
   console.log('  https://www.docker.com/products/docker-desktop/\n');
-}
-
-if (!dockerComposeInstalled && dockerInstalled) {
-  console.log('\n📝 Note: Docker Compose is usually included with Docker Desktop\n');
-}
-
-if (cloudflaredInstalled && dockerInstalled) {
-  console.log('\n✅ All requirements are met! You can now run:\n');
+  console.log('\n⚠️  Please install one of the above options first.\n');
+} else if (!cloudflaredInstalled && dockerInstalled) {
+  console.log('\n💡 Cloudflared is not installed, but that\'s OK!\n');
+  console.log('✅ You have Docker, which can run cloudflared commands.\n');
+  console.log('All scripts will use Docker automatically.\n');
+  console.log('='.repeat(50));
+  console.log('\n✅ You\'re ready to go! Next steps:\n');
+  console.log('  npm run login    # Login to Cloudflare (via Docker)');
+  console.log('  npm run setup    # Create a new tunnel');
+  console.log('  npm start        # Start tunnels\n');
+  console.log('📝 Optional: Install cloudflared for faster commands:');
+  console.log('  winget install Cloudflare.cloudflared\n');
+} else if (cloudflaredInstalled && !dockerInstalled) {
+  console.log('\n⚠️  Docker is required to run tunnels in containers.\n');
+  console.log('🐳 How to install Docker:\n');
+  console.log('Download Docker Desktop from:');
+  console.log('  https://www.docker.com/products/docker-desktop/\n');
+  console.log('\n⚠️  Please install Docker to continue.\n');
+} else if (cloudflaredInstalled && dockerInstalled) {
+  console.log('\n✅ Perfect! All requirements are met!\n');
+  console.log('You can now run:\n');
   console.log('  npm run login    # Login to Cloudflare');
   console.log('  npm run setup    # Create a new tunnel');
   console.log('  npm start        # Start tunnels\n');
-} else {
-  console.log('\n⚠️  Please install the missing requirements first.\n');
+}
+
+if (!dockerComposeInstalled && dockerInstalled) {
+  console.log('📝 Note: Docker Compose is usually included with Docker Desktop\n');
 }
 
