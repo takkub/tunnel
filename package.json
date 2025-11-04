@@ -1,10 +1,30 @@
 {
-  "name": "${PROJECT_NAME}",
+  "name": "tunnel",
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "check": "node scripts/check-requirements.js",
+    "login": "cloudflared tunnel login",
+    "setup": "node scripts/setup-tunnel.js",
+    "delete": "node scripts/delete-tunnel.js",
+    "status": "node scripts/status.js",
+    "tunnel:home:up": "docker-compose -f docker-compose-cloudflare-home.yml up -d",
+    "tunnel:home:down": "docker-compose -f docker-compose-cloudflare-home.yml down",
+    "tunnel:app:up": "docker-compose -f docker-compose-cloudflare-app.yml up -d",
+    "tunnel:app:down": "docker-compose -f docker-compose-cloudflare-app.yml down",
+    "tunnel:app:logs": "docker-compose -f docker-compose-cloudflare-app.yml logs -f",
+    "tunnel:app:restart": "npm run tunnel:app:down && npm run tunnel:app:up",
+    "tunnel:office:up": "docker-compose -f docker-compose-cloudflare-office.yml up -d",
+    "tunnel:office:down": "docker-compose -f docker-compose-cloudflare-office.yml down",
+    "tunnel:office:logs": "docker-compose -f docker-compose-cloudflare-office.yml logs -f",
+    "tunnel:office:restart": "npm run tunnel:office:down && npm run tunnel:office:up",
+    "tunnel:all:up": "npm run tunnel:app:up && npm run tunnel:office:up",
+    "tunnel:all:down": "npm run tunnel:app:down && npm run tunnel:office:down",
+    "tunnel:all:restart": "npm run tunnel:all:down && npm run tunnel:all:up",
+    "start": "npm run tunnel:all:up",
+    "stop": "npm run tunnel:all:down"
   },
   "dependencies": {},
   "devDependencies": {

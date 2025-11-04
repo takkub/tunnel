@@ -1,11 +1,50 @@
-/tmp
-/out-tsc
-
+﻿# Dependencies
 /node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 /.pnp
 .pnp.js
-
+package-lock.json
+# Build output
+/dist
+/build
+/out-tsc
+/tmp
+# IDE
 .vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.idea/*
+*.iml
+*.swp
+*.swo
+*~
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+# Cloudflare Credentials - IMPORTANT!
+cloudflared/**/*.json
+cloudflared/**/cert.pem
+*.pem
+# Keep config files
+!cloudflared/**/config.yml
+!package.json
+!tsconfig.json
+# Docker
+.docker
+# Environment
+.env
+.env.local
+.env.*.local
+# Logs
+logs
+*.log
+# Temporary files
+*.tmp
+*.temp
+.cache
