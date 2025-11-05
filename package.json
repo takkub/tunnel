@@ -6,6 +6,7 @@
   "scripts": {
     "check": "node scripts/check-requirements.js",
     "check-dns": "node scripts/check-dns.js",
+    "check-cnames": "node -e \"require('dotenv').config();require('./scripts/cloudflare-api').listDnsRecords(process.env.ZONE_ID,process.env.CLOUDFLARE_API_TOKEN).then(r=>r.filter(x=>x.type==='CNAME'&&x.content.includes('cfargotunnel.com')).forEach(x=>console.log(x.name)))\"",
     "login": "node scripts/login.js",
     "setup": "node scripts/setup-tunnel.js",
     "cleanup": "node scripts/cleanup-tunnel.js",
@@ -17,7 +18,9 @@
     "start": "npm run tunnel:app:up",
     "stop": "npm run tunnel:app:down"
   },
-  "dependencies": {},
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  },
   "devDependencies": {
     "typescript": "^5.5.3"
   },
