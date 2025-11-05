@@ -215,6 +215,10 @@ async function main() {
   const configContent = `tunnel: ${tunnelId}
 credentials-file: /etc/cloudflared/${tunnelId}.json
 
+# Protocol: auto จะลอง QUIC ก่อน แล้ว fallback เป็น HTTP/2 ถ้าไม่ได้
+# ถ้าต้องการบังคับใช้ HTTP/2 เปลี่ยนเป็น: protocol: http2
+protocol: auto
+
 ingress:
   - hostname: ${domain}
     service: http://host.docker.internal:${localPort}
@@ -223,6 +227,7 @@ ingress:
   fs.writeFileSync(path.join(configDir, 'config.yml'), configContent);
   console.log('✓ Created: config.yml');
   console.log(`  Tunnel ID: ${tunnelId}`);
+  console.log(`  Protocol: auto (QUIC → HTTP/2 fallback)`);
   console.log(`  Domain: ${domain}`);
 
   // Setup DNS
