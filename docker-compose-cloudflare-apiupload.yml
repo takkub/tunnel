@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  cloudflared-app:
+  cloudflared-apiupload:
     image: cloudflare/cloudflared:latest
-    container_name: cloudflared-tunnel-app
+    container_name: cloudflared-tunnel-apiupload
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
     volumes:
-      - ./tunnels/app:/etc/cloudflared
+      - ./tunnels/apiupload:/etc/cloudflared
     extra_hosts:
       - "host.docker.internal:host-gateway"

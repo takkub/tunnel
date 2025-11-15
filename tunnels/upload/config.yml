@@ -1,0 +1,11 @@
+tunnel: e8f11657-646b-4c68-946a-910c45a85679
+credentials-file: /etc/cloudflared/e8f11657-646b-4c68-946a-910c45a85679.json
+
+# Protocol: auto จะลอง QUIC ก่อน แล้ว fallback เป็น HTTP/2 ถ้าไม่ได้
+# ถ้าต้องการบังคับใช้ HTTP/2 เปลี่ยนเป็น: protocol: http2
+protocol: auto
+
+ingress:
+  - hostname: upload.sabuytube.xyz
+    service: http://host.docker.internal:5555
+  - service: http_status:404

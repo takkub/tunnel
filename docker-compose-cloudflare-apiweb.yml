@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  cloudflared-apiweb:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-tunnel-apiweb
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./tunnels/apiweb:/etc/cloudflared
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
