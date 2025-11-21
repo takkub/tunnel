@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  cloudflared-n8n:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-tunnel-n8n
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./tunnels/n8n:/etc/cloudflared
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

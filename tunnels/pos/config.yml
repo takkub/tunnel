@@ -1,0 +1,7 @@
+tunnel: 7d582151-f1f4-4c7f-a8d6-18bf240e3e17
+credentials-file: /etc/cloudflared/7d582151-f1f4-4c7f-a8d6-18bf240e3e17.json
+
+ingress:
+  - hostname: pos.sabuytube.xyz
+    service: http://host.docker.internal:3000
+  - service: http_status:404
