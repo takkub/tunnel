@@ -11,10 +11,9 @@
     "setup": "node scripts/setup-tunnel.js",
     "cleanup": "node scripts/cleanup-tunnel.js",
     "status": "node scripts/status.js",
-    "tunnel:app:up": "docker-compose -f docker-compose-cloudflare-app.yml up -d",
-    "tunnel:app:down": "docker-compose -f docker-compose-cloudflare-app.yml down",
-    "tunnel:app:logs": "docker-compose -f docker-compose-cloudflare-app.yml logs -f",
-    "tunnel:app:restart": "npm run tunnel:app:down && npm run tunnel:app:up",
+    "tunnel:apiupload:up": "docker-compose -f docker-compose-cloudflare-apiupload.yml up -d",
+    "tunnel:upload:up": "docker-compose -f docker-compose-cloudflare-upload.yml up -d",
+    "tunnel:app:down": "docker-compose -f docker-compose-cloudflare-app.yml down -d",
     "start": "npm run tunnel:app:up",
     "stop": "npm run tunnel:app:down"
   },
