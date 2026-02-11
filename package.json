@@ -19,6 +19,15 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "bin": {
+    "tunnel-manager": "./scripts/menu.js"
+  },
+  "files": [
+    "scripts/",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
   "scripts": {
     "menu": "node scripts/menu.js",
     "start": "docker-compose up -d",
