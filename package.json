@@ -1,0 +1,42 @@
+{
+  "name": "cloudflare-tunnel-manager",
+  "version": "1.0.0",
+  "description": "Interactive CLI tool to create, manage, and delete Cloudflare Tunnels with Docker support",
+  "author": "takkub",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/takkub/tunnel.git"
+  },
+  "keywords": [
+    "cloudflare",
+    "tunnel",
+    "cloudflared",
+    "docker",
+    "dns",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "menu": "node scripts/menu.js",
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "check": "node scripts/check-requirements.js",
+    "login": "node scripts/login.js",
+    "setup": "node scripts/setup-tunnel.js",
+    "status": "node scripts/status.js",
+    "delete": "node scripts/delete-tunnel.js",
+    "cleanup": "node scripts/cleanup-tunnel.js",
+    "check:dns": "node scripts/check-dns.js",
+    "check:cnames": "node scripts/list-cnames.js",
+    "cleanup:cnames": "node scripts/cleanup-all-cnames.js",
+    "fix:dns": "node scripts/fix-app-dns.js",
+    "delete:force": "node scripts/force-delete-tunnel.js",
+    "delete:quick": "node scripts/quick-delete-tunnel.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}

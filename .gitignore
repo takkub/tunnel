@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+package-lock.json
+
+# Build output
+dist/
+build/
+out-tsc/
+tmp/
+.tmp/
+.cache/
+coverage/
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Cloudflare credentials & binaries
+cloudflared.exe
+cloudflared
+tunnels/
+
+# Docker compose (user-generated per tunnel)
+docker-compose-cloudflare-*.yml
+
+# IDE
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# AI agent config (local use only)
+.agent/
+
+# Logs
+logs/
+*.log
+
+# Certificates & Keys
+*.pem
+*.key
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Misc
+*.tmp
+*.temp
+*.bak
