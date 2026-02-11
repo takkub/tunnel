@@ -8,6 +8,35 @@
 
 ---
 
+## 📸 Preview
+
+```text
+╔══════════════════════════════════════════════════════════════╗
+║                  Cloudflare Tunnel Manager                   ║
+╚══════════════════════════════════════════════════════════════╝
+Use Up/Down to navigate, Enter to select
+
+  🚀 Status & Start
+    Show Status              View tunnel & docker status
+    Start Tunnels            Start all tunnels (docker up)
+    Stop Tunnels             Stop all tunnels (docker down)
+
+  ⚙️  Management
+  → Setup New Tunnel         Create & configure a new tunnel
+    Delete Tunnel            Remove an existing tunnel
+    Login to Cloudflare      Authenticate with Cloudflare
+
+  🔧 Utilities
+    Check Requirements       Verify system dependencies
+    Check DNS                Inspect DNS records
+    Cleanup All CNAMEs       Delete ALL tunnel CNAMEs
+
+  ❌ Exit
+    Exit                     Close this menu
+```
+
+---
+
 ## ✨ Features
 
 - 🚀 **Interactive Menu** — Arrow-key driven TUI for all operations
