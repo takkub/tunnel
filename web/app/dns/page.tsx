@@ -62,6 +62,8 @@ export default function DnsPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [output, setOutput] = useState('')
   const [activeAction, setActiveAction] = useState<string | null>(null)
+  const [fixDialog, setFixDialog] = useState(false)
+  const [fixForm, setFixForm] = useState({ tunnelId: '', domain: '', oldTunnelId: '' })
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
@@ -69,6 +71,10 @@ export default function DnsPage() {
   }
 
   const call = async (action: DnsAction) => {
+    if (action.url === '/api/dns/fix') {
+      setFixDialog(true)
+      return
+    }
     setActiveAction(action.label)
     setOutput('')
     const res = await fetch(action.url, { method: action.method ?? 'GET' })
@@ -78,9 +84,81 @@ export default function DnsPage() {
     setActiveAction(null)
   }
 
+  const submitFix = async () => {
+    if (!fixForm.tunnelId || !fixForm.domain) return
+    setFixDialog(false)
+    setActiveAction('แก้ไข DNS')
+    setOutput('')
+    const res = await fetch('/api/dns/fix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fixForm),
+    })
+    const data = await res.json()
+    setOutput(JSON.stringify(data, null, 2))
+    showToast(data.message ?? 'เสร็จแล้ว', res.ok ? 'success' : 'error')
+    setActiveAction(null)
+  }
+
   return (
     <div className="max-w-2xl space-y-5">
       {toast && <Toast message={toast.msg} type={toast.type} />}
+
+      {/* Fix DNS dialog */}
+      {fixDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={e => e.target === e.currentTarget && setFixDialog(false)}>
+          <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4">
+            <h2 className="text-sm font-semibold text-zinc-100">แก้ไข DNS Route</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Tunnel ID <span className="text-orange-400">*</span></label>
+                <input
+                  type="text"
+                  value={fixForm.tunnelId}
+                  onChange={e => setFixForm(f => ({ ...f, tunnelId: e.target.value }))}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Domain <span className="text-orange-400">*</span></label>
+                <input
+                  type="text"
+                  value={fixForm.domain}
+                  onChange={e => setFixForm(f => ({ ...f, domain: e.target.value }))}
+                  placeholder="app.example.com"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Old Tunnel ID <span className="text-zinc-600">(optional)</span></label>
+                <input
+                  type="text"
+                  value={fixForm.oldTunnelId}
+                  onChange={e => setFixForm(f => ({ ...f, oldTunnelId: e.target.value }))}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setFixDialog(false)}
+                className="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:text-zinc-200 hover:border-zinc-600 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={submitFix}
+                disabled={!fixForm.tunnelId || !fixForm.domain}
+                className="flex-1 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+              >
+                แก้ไข DNS
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {ACTIONS.map(action => (

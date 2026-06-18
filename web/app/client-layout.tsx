@@ -87,6 +87,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">
+      {/* Mobile: fixed toggle button — always accessible regardless of scroll position */}
+      <button
+        ref={toggleBtnRef}
+        onClick={() => setSidebarOpen(v => !v)}
+        className="fixed top-3 left-3 z-[60] lg:hidden w-9 h-9 flex items-center justify-center rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shadow-md backdrop-blur-sm"
+        aria-label="Toggle sidebar"
+        aria-expanded={sidebarOpen}
+        aria-controls="sidebar-nav"
+      >
+        <IconMenu className="w-5 h-5" />
+      </button>
+
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -132,18 +144,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="h-14 flex items-center px-4 gap-3 border-b border-zinc-800/60 shrink-0"
+        <header className="h-14 flex items-center px-4 gap-3 border-b border-zinc-800/60 shrink-0 lg:px-4 pl-14 lg:pl-4"
           style={{ background: 'rgba(9,9,11,0.95)', backdropFilter: 'blur(8px)' }}>
-          <button
-            ref={toggleBtnRef}
-            onClick={() => setSidebarOpen(v => !v)}
-            className="lg:hidden text-zinc-400 hover:text-zinc-200 transition-colors p-1 -ml-1 rounded-lg"
-            aria-label="Toggle sidebar"
-            aria-expanded={sidebarOpen}
-            aria-controls="sidebar-nav"
-          >
-            <IconMenu className="w-5 h-5" />
-          </button>
           <h1 className="text-sm font-semibold text-zinc-200">{title}</h1>
         </header>
 

@@ -44,7 +44,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchTunnels()
     fetchRuntime()
-    const interval = setInterval(fetchTunnels, 10000)
+    const interval = setInterval(fetchTunnels, 30000)
     return () => clearInterval(interval)
   }, [])
 
