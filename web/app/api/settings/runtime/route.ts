@@ -22,6 +22,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ mode, dockerAvailable, effective })
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }

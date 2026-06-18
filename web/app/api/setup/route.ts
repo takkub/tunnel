@@ -14,6 +14,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: `สร้าง ${safeName} แล้ว`, output })
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }

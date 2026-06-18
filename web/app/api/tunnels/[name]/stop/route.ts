@@ -9,6 +9,6 @@ export async function POST(_req: Request, { params }: { params: { name: string }
     return NextResponse.json({ message: `หยุด ${params.name} แล้ว`, output })
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาด' }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }

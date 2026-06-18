@@ -1,5 +1,10 @@
 // Non-interactive tunnel control: node tunnel-ctrl.js <start|stop> <tunnelName>
-const { getEffectiveMode, dockerStart, dockerStop, nativeStart, nativeStop } = require('./runtime');
+const {
+  getEffectiveMode,
+  dockerStart, dockerStop, dockerStatus,
+  nativeStart, nativeStop, nativeRunning,
+  getCloudflaredProcesses,
+} = require('./runtime');
 
 const [action, tunnelName] = process.argv.slice(2);
 
@@ -9,22 +14,39 @@ if (!action || !tunnelName || !['start', 'stop'].includes(action)) {
 }
 
 try {
-  const mode = getEffectiveMode();
-  if (action === 'start') {
+  if (action === 'stop') {
+    const isDocker = dockerStatus(tunnelName);
+    const processes = isDocker ? [] : getCloudflaredProcesses();
+    const isNative = !isDocker && nativeRunning(tunnelName, processes);
+
+    if (!isDocker && !isNative) {
+      process.stdout.write('already stopped\n');
+      process.exit(0);
+    }
+
+    if (isDocker) dockerStop(tunnelName);
+    if (isNative) nativeStop(tunnelName);
+    process.stdout.write('stopped\n');
+  } else {
+    // start — idempotent: no-op if already running in either runtime
+    const isDocker = dockerStatus(tunnelName);
+    if (isDocker) {
+      process.stdout.write('already running\n');
+      process.exit(0);
+    }
+    const processes = getCloudflaredProcesses();
+    if (nativeRunning(tunnelName, processes)) {
+      process.stdout.write('already running\n');
+      process.exit(0);
+    }
+
+    const mode = getEffectiveMode();
     if (mode === 'native') {
       const pid = nativeStart(tunnelName);
       process.stdout.write(`started native (pid ${pid})\n`);
     } else {
       dockerStart(tunnelName);
       process.stdout.write('start ok\n');
-    }
-  } else {
-    if (mode === 'native') {
-      nativeStop(tunnelName);
-      process.stdout.write('stopped native\n');
-    } else {
-      dockerStop(tunnelName);
-      process.stdout.write('stop ok\n');
     }
   }
 } catch (e) {

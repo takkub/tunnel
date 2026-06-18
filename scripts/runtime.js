@@ -68,9 +68,20 @@ function dockerStart(name) {
 }
 
 function dockerStop(name) {
+  const containerName = `cloudflared-tunnel-${name}`;
   const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
-  if (!fs.existsSync(composeFile)) throw new Error(`No compose file for ${name}`);
-  execSync(`docker compose -f "${composeFile}" down`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+  if (fs.existsSync(composeFile)) {
+    try {
+      execSync(`docker compose -f "${composeFile}" down`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+    } catch {}
+  }
+  // Fallback: force-remove container if still running (e.g. started from old/different compose project)
+  try {
+    const out = execSync('docker ps --format "{{.Names}}"', { encoding: 'utf8', stdio: 'pipe' });
+    if (out.split('\n').map(l => l.trim()).includes(containerName)) {
+      execSync(`docker rm -f "${containerName}"`, { encoding: 'utf8', stdio: 'pipe' });
+    }
+  } catch {}
 }
 
 function dockerStatus(name) {
