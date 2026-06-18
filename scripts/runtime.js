@@ -53,13 +53,22 @@ function getEffectiveMode() {
 
 // Docker operations
 function dockerStart(name) {
-  const composeFile = path.join(ROOT, `docker-compose-cloudflare-${name}.yml`);
+  const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
   if (!fs.existsSync(composeFile)) throw new Error(`No compose file for ${name}`);
-  execSync(`docker compose -f "${composeFile}" up -d`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+  try {
+    execSync(`docker compose -f "${composeFile}" up -d --remove-orphans`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+  } catch (err) {
+    // Name conflict: stale container with same name from outside this compose project
+    const containerName = `cloudflared-tunnel-${name}`;
+    try {
+      execSync(`docker rm -f "${containerName}"`, { encoding: 'utf8', stdio: 'pipe' });
+    } catch {}
+    execSync(`docker compose -f "${composeFile}" up -d --remove-orphans`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+  }
 }
 
 function dockerStop(name) {
-  const composeFile = path.join(ROOT, `docker-compose-cloudflare-${name}.yml`);
+  const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
   if (!fs.existsSync(composeFile)) throw new Error(`No compose file for ${name}`);
   execSync(`docker compose -f "${composeFile}" down`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
 }
@@ -141,6 +150,60 @@ function nativeStatus(name) {
   }
 }
 
+// Generate per-tunnel start launchers in tunnels/<name>/
+// Launchers run cloudflared FOREGROUND: closing the window/terminal stops the tunnel.
+// nativeStart (used by web dashboard) remains detached as before.
+function generateLaunchers(name) {
+  const tunnelDir = path.join(TUNNELS_DIR, name);
+  fs.mkdirSync(tunnelDir, { recursive: true });
+
+  const configPath = path.join(tunnelDir, 'config.yml');
+  const credPath = fs.existsSync(configPath)
+    ? resolveCredentialsFile(tunnelDir, configPath)
+    : null;
+
+  // Relative paths from project root using forward slashes
+  const relConfig = `tunnels/${name}/config.yml`;
+  const relCred = credPath
+    ? credPath.replace(ROOT + path.sep, '').replace(/\\/g, '/')
+    : `tunnels/${name}/<credentials>.json`;
+
+  // Windows .bat — foreground: close window = tunnel stops immediately
+  const relConfigWin = relConfig.replace(/\//g, '\\');
+  const relCredWin = relCred.replace(/\//g, '\\');
+  const batLines = [
+    '@echo off',
+    'setlocal',
+    `:: Start tunnel: ${name}  (foreground — close this window to stop the tunnel)`,
+    'set "ROOT=%~dp0..\\.."',
+    'cd /d "%ROOT%"',
+    'if exist "%ROOT%\\cloudflared.exe" (',
+    `    "%ROOT%\\cloudflared.exe" tunnel --config "${relConfigWin}" --credentials-file "${relCredWin}" run`,
+    ') else (',
+    `    cloudflared tunnel --config "${relConfigWin}" --credentials-file "${relCredWin}" run`,
+    ')',
+  ];
+  fs.writeFileSync(path.join(tunnelDir, 'start.bat'), batLines.join('\r\n') + '\r\n');
+
+  // Unix shell — foreground: Ctrl-C or closing terminal stops the tunnel
+  const shLines = [
+    '#!/usr/bin/env bash',
+    `# Start tunnel: ${name}  (foreground — Ctrl-C or close terminal to stop)`,
+    'ROOT="$(cd "$(dirname "$0")/../.." && pwd)"',
+    'cd "$ROOT"',
+    `exec cloudflared tunnel --config "${relConfig}" --credentials-file "${relCred}" run`,
+  ];
+  const sh = shLines.join('\n') + '\n';
+
+  const shPath = path.join(tunnelDir, 'start.sh');
+  fs.writeFileSync(shPath, sh);
+  try { fs.chmodSync(shPath, 0o755); } catch {}
+
+  const commandPath = path.join(tunnelDir, 'start.command');
+  fs.writeFileSync(commandPath, sh);
+  try { fs.chmodSync(commandPath, 0o755); } catch {}
+}
+
 // Enumerate available tunnels by mode
 function getTunnelNames() {
   if (!fs.existsSync(TUNNELS_DIR)) return [];
@@ -151,9 +214,11 @@ function getTunnelNames() {
 }
 
 function getDockerTunnelNames() {
-  return fs.readdirSync(ROOT)
-    .filter(f => f.startsWith('docker-compose-cloudflare-') && f.endsWith('.yml'))
-    .map(f => f.match(/docker-compose-cloudflare-(.+)\.yml/)[1]);
+  if (!fs.existsSync(TUNNELS_DIR)) return [];
+  return fs.readdirSync(TUNNELS_DIR).filter(f => {
+    if (!fs.statSync(path.join(TUNNELS_DIR, f)).isDirectory()) return false;
+    return fs.existsSync(path.join(TUNNELS_DIR, f, 'docker-compose.yml'));
+  });
 }
 
 module.exports = {
@@ -172,4 +237,5 @@ module.exports = {
   nativeStatus,
   getTunnelNames,
   getDockerTunnelNames,
+  generateLaunchers,
 };

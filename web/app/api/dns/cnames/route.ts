@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { runScript } from '@/lib/scripts'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const output = await runScript('list-cnames.js')

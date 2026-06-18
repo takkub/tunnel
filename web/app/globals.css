@@ -2,16 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  @keyframes slide-in {
-    from { opacity: 0; transform: translateX(1rem); }
-    to   { opacity: 1; transform: translateX(0); }
-  }
-  .animate-slide-in {
-    animation: slide-in 0.2s ease-out both;
-  }
-}
-
 @layer base {
   html {
     font-size: 16px;
@@ -19,26 +9,60 @@
   }
 
   body {
+    font-family: var(--font-inter), var(--font-noto-thai), ui-sans-serif, system-ui, sans-serif;
     line-height: 1.6;
+    background-color: #09090b;
+    color: #f4f4f5;
   }
 
-  /* Thin scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #374151 transparent;
+    scrollbar-color: #3f3f46 transparent;
   }
 
-  *::-webkit-scrollbar {
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background-color: #3f3f46; border-radius: 2px; }
+}
+
+@layer utilities {
+  .text-gradient-orange {
+    background: linear-gradient(135deg, #f97316, #fb923c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-card {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+  }
+
+  .nav-active-dot::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
     width: 4px;
     height: 4px;
+    border-radius: 50%;
+    background-color: #f97316;
   }
 
-  *::-webkit-scrollbar-track {
-    background: transparent;
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(0.75rem); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .animate-slide-in {
+    animation: slide-in-right 0.2s ease-out both;
   }
 
-  *::-webkit-scrollbar-thumb {
-    background-color: #374151;
-    border-radius: 2px;
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  .animate-scale-in {
+    animation: scale-in 0.15s ease-out both;
   }
 }

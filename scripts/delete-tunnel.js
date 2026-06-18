@@ -2,20 +2,62 @@ const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const ui = require('./ui-helper');
+const { getTunnelNames } = require('./runtime');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const tunnelName = process.argv[2];
-if (!tunnelName) {
-  console.error('Usage: node delete-tunnel.js <tunnelName>');
-  process.exit(1);
-}
-
-if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(tunnelName)) {
-  console.error('Invalid tunnel name');
-  process.exit(1);
-}
-
 const projectRoot = path.join(__dirname, '..');
+
+async function resolveTunnelName() {
+  const arg = process.argv[2];
+
+  if (arg) {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(arg)) {
+      console.error('Invalid tunnel name');
+      process.exit(1);
+    }
+    return arg;
+  }
+
+  if (!process.stdin.isTTY) {
+    console.error('Usage: node delete-tunnel.js <tunnelName>');
+    process.exit(1);
+  }
+
+  // Interactive picker — names come from a controlled list (no injection risk)
+  const names = getTunnelNames().sort();
+  if (names.length === 0) {
+    ui.fail('No tunnels found');
+    process.exit(1);
+  }
+
+  let selected;
+  try {
+    selected = await ui.selectFromList(
+      'Select tunnel to delete',
+      names.map(n => ({ label: n, value: n }))
+    );
+  } catch {
+    console.log(`${ui.c.yellow}Cancelled${ui.c.reset}`);
+    process.exit(0);
+  }
+
+  // Confirm before irreversible delete (default: No)
+  let confirmed;
+  try {
+    confirmed = await ui.confirmAction(`Delete "${selected}"? This cannot be undone.`, false);
+  } catch {
+    console.log(`${ui.c.yellow}Cancelled${ui.c.reset}`);
+    process.exit(0);
+  }
+
+  if (!confirmed) {
+    console.log(`${ui.c.yellow}Cancelled${ui.c.reset}`);
+    process.exit(0);
+  }
+
+  return selected;
+}
 
 function execFile(bin, args) {
   try {
@@ -95,10 +137,11 @@ async function deleteDnsRecords(hostnames) {
 }
 
 async function main() {
+  const tunnelName = await resolveTunnelName();
   console.log(`Deleting tunnel: ${tunnelName}`);
 
   // Step 1: Stop docker
-  const composeFile = path.join(projectRoot, `docker-compose-cloudflare-${tunnelName}.yml`);
+  const composeFile = path.join(projectRoot, 'tunnels', tunnelName, 'docker-compose.yml');
   if (fs.existsSync(composeFile)) {
     console.log('[1/5] Stopping Docker container...');
     const ok = execFile('docker', ['compose', '-f', composeFile, 'down']);
@@ -126,7 +169,7 @@ async function main() {
     console.log('No hostnames found in config, skipping DNS deletion');
   }
 
-  // Step 4: Delete tunnel folder
+  // Step 4: Delete tunnel folder (includes config, credentials, launchers start.bat/.sh/.command)
   console.log('[4/5] Deleting tunnel folder...');
   const tunnelsBase = path.resolve(projectRoot, 'tunnels');
   const tunnelDir = path.resolve(tunnelsBase, tunnelName);
@@ -135,7 +178,7 @@ async function main() {
   } else if (fs.existsSync(tunnelDir)) {
     try {
       fs.rmSync(tunnelDir, { recursive: true, force: true });
-      console.log(`[OK] Deleted: tunnels/${tunnelName}/`);
+      console.log(`[OK] Deleted: tunnels/${tunnelName}/ (including launchers)`);
     } catch (err) {
       console.warn(`[WARN] Could not delete folder: ${err.message}`);
     }
@@ -143,18 +186,8 @@ async function main() {
     console.log('No tunnel folder found, skipping...');
   }
 
-  // Step 5: Delete docker-compose file
-  console.log('[5/5] Deleting docker-compose file...');
-  if (fs.existsSync(composeFile)) {
-    try {
-      fs.unlinkSync(composeFile);
-      console.log(`[OK] Deleted: docker-compose-cloudflare-${tunnelName}.yml`);
-    } catch (err) {
-      console.warn(`[WARN] Could not delete file: ${err.message}`);
-    }
-  } else {
-    console.log('No docker-compose file found, skipping...');
-  }
+  // Step 5: (compose is inside tunnel folder — already removed in step 4)
+  console.log('[5/5] docker-compose.yml removed with tunnel folder.');
 
   console.log('Done.');
 }

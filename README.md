@@ -2,6 +2,39 @@
 
 Automation to manage Cloudflare tunnels across Windows, macOS, and Linux — via Docker or native `cloudflared`.
 
+## Installation / ติดตั้ง
+
+### Quick Start
+
+| Platform | How to install |
+|---|---|
+| **Windows** | Double-click `install.bat` |
+| **macOS** | Double-click `install.command` (right-click → Open on first run) |
+| **Linux** | `chmod +x install.sh && ./install.sh` |
+
+Each installer:
+1. Checks for Node.js — prints install instructions if missing
+2. Downloads `cloudflared` for your OS/arch if not already present
+3. Runs `npm install` for root + `web/`
+4. Creates `.env` from `.env.example` if not present
+
+### Requirements
+
+| Tool | Required | Notes |
+|---|---|---|
+| **Node.js 18+** | Yes | [nodejs.org](https://nodejs.org) or `brew install node` |
+| **cloudflared** | Yes | Installer downloads automatically |
+| **Docker** | No | Optional — installer detects and reports |
+
+### After Install
+
+1. Edit `.env` — set `CLOUDFLARE_API_TOKEN` and `ZONE_ID`
+2. Login to Cloudflare: `npm run login`
+3. Open web UI: `npm run web:dev` → http://localhost:3000  
+   or double-click `tunnels/<name>/start.bat` (Windows) / `start.command` (macOS) / run `start.sh` (Linux)
+
+---
+
 ## Requirements
 
 | Requirement | Windows | macOS | Linux |
@@ -10,25 +43,25 @@ Automation to manage Cloudflare tunnels across Windows, macOS, and Linux — via
 | cloudflared | `cloudflared.exe` bundled in repo | `brew install cloudflared` | package manager |
 | Docker (optional) | Docker Desktop | Docker Desktop | Docker Engine |
 
-## One-Click Launchers
+## Per-Tunnel Launchers
 
-### Open Web UI (recommended)
+Every tunnel gets its own one-click launcher files inside `tunnels/<name>/`:
 
-| Platform | Action |
-|---|---|
-| **Windows** | Double-click `start.bat` |
-| **macOS** | Double-click `start.command` (right-click → Open first time) |
-| **Linux** | Run `./start.sh` in terminal |
+| File | Platform | How to use |
+|---|---|---|
+| `start.bat` | Windows | Double-click |
+| `start.command` | macOS | Double-click (right-click → Open on first run) |
+| `start.sh` | Linux | `./start.sh` in terminal |
 
-Opens the web UI at `http://localhost:3000` automatically.
+Each launcher starts only that specific tunnel using the effective runtime mode (Docker if available, otherwise native `cloudflared`).
 
-### Start All Tunnels
+These files are created automatically when you create a tunnel via the web UI or `npm run setup`.
 
-| Platform | Action |
-|---|---|
-| **Windows** | Double-click `start-tunnels.bat` |
-| **macOS** | Double-click `start-tunnels.command` |
-| **Linux** | Run `./start-tunnels.sh` in terminal |
+### Web UI
+
+```bash
+npm run web:dev   # start web UI (http://localhost:3000)
+```
 
 ### Docker (any platform)
 

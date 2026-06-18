@@ -9,7 +9,10 @@ interface Tunnel {
   name: string
   running: boolean
   containerId?: string
+  hostname?: string
 }
+
+type FilterType = 'all' | 'running' | 'stopped'
 
 export default function DashboardPage() {
   const [tunnels, setTunnels] = useState<Tunnel[]>([])
@@ -18,6 +21,8 @@ export default function DashboardPage() {
   const [busy, setBusy] = useState<'start' | 'stop' | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [effectiveMode, setEffectiveMode] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<FilterType>('all')
 
   const fetchTunnels = async () => {
     const res = await fetch('/api/tunnels')
@@ -33,9 +38,7 @@ export default function DashboardPage() {
         const data = await res.json()
         setEffectiveMode(data.effective ?? data.mode ?? null)
       }
-    } catch {
-      // API not yet available — badge stays hidden
-    }
+    } catch { /* API not yet available */ }
   }
 
   useEffect(() => {
@@ -68,11 +71,27 @@ export default function DashboardPage() {
     setBusy(null)
   }
 
+  const runningCount = tunnels.filter(t => t.running).length
   const isBusy = busy !== null
+
+  const filteredTunnels = tunnels.filter(t => {
+    const q = search.toLowerCase()
+    const matchesSearch = !q || t.name.toLowerCase().includes(q) || t.hostname?.toLowerCase().includes(q)
+    const matchesFilter =
+      filter === 'all' || (filter === 'running' && t.running) || (filter === 'stopped' && !t.running)
+    return matchesSearch && matchesFilter
+  })
+
+  const chips: { key: FilterType; label: string; count: number }[] = [
+    { key: 'all', label: 'ทั้งหมด', count: tunnels.length },
+    { key: 'running', label: 'Running', count: runningCount },
+    { key: 'stopped', label: 'Stopped', count: tunnels.length - runningCount },
+  ]
 
   return (
     <div className="pb-28">
       {toast && <Toast message={toast.msg} type={toast.type} />}
+
       {showCreate && (
         <CreateTunnelModal
           onSuccess={() => { setShowCreate(false); fetchTunnels() }}
@@ -80,57 +99,137 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-2xl font-bold">Cloudflare Tunnels</h1>
-        {effectiveMode && (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-gray-800 text-gray-300 border border-gray-700 font-mono">
-            {effectiveMode}
-          </span>
-        )}
+      {/* Global busy overlay */}
+      {isBusy && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" style={{ backdropFilter: 'blur(4px)' }}>
+          <div className="bg-[#18181b] border border-zinc-800 rounded-2xl px-6 py-5 flex items-center gap-3 shadow-2xl">
+            <span className="w-5 h-5 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+            <span className="text-zinc-200 text-sm font-medium">
+              {busy === 'start' ? 'กำลังเริ่ม tunnels...' : 'กำลังหยุด tunnels...'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Stats bar */}
+      {!loading && (
+        <div className="mb-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-zinc-100">{tunnels.length}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Total</p>
+            </div>
+            <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-emerald-400">{runningCount}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Running</p>
+            </div>
+            <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-zinc-400">{tunnels.length - runningCount}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Stopped</p>
+            </div>
+          </div>
+          {effectiveMode && (
+            <div className="flex justify-end mt-1.5">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">
+                {effectiveMode}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sticky search + filter */}
+      <div className="sticky top-14 z-30 pb-3 pt-0.5" style={{ background: 'rgba(9,9,11,0.95)', backdropFilter: 'blur(8px)' }}>
+        <div className="relative mb-2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="ค้นหา tunnel..."
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+          />
+        </div>
+        <div className="flex gap-2">
+          {chips.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setFilter(c.key)}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border ${
+                filter === c.key
+                  ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+              }`}
+            >
+              {c.label} <span className="opacity-60">{c.count}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      {/* Bulk actions */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
         <Button
           onClick={handleStartAll}
-          disabled={isBusy}
+          disabled={isBusy || tunnels.length === 0}
           loading={busy === 'start'}
-          variant="primary"
-          className="w-full justify-center"
+          variant="success"
+          className="justify-center text-sm"
         >
           เริ่มทั้งหมด
         </Button>
         <Button
           onClick={handleStopAll}
-          disabled={isBusy}
+          disabled={isBusy || runningCount === 0}
           loading={busy === 'stop'}
           variant="danger"
-          className="w-full justify-center"
+          className="justify-center text-sm"
         >
           หยุดทั้งหมด
         </Button>
       </div>
 
+      {/* Tunnel list */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3" aria-busy="true" aria-label="กำลังโหลด">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3" aria-busy="true">
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-gray-900 rounded-2xl p-5 animate-pulse space-y-3">
+            <div key={i} className="bg-[#18181b] border border-zinc-800 rounded-2xl p-4 animate-pulse space-y-3">
               <div className="flex items-center justify-between">
-                <div className="h-5 w-32 bg-gray-700 rounded" />
-                <div className="h-5 w-16 bg-gray-700 rounded-full" />
+                <div className="h-4 w-32 bg-zinc-800 rounded" />
+                <div className="h-5 w-16 bg-zinc-800 rounded-full" />
               </div>
-              <div className="h-10 w-full bg-gray-800 rounded-xl" />
+              <div className="h-3 w-24 bg-zinc-900 rounded" />
+              <div className="h-11 w-full bg-zinc-900 rounded-xl" />
             </div>
           ))}
         </div>
-      ) : tunnels.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-4xl mb-3">☁️</p>
-          <p className="text-base">ยังไม่มี tunnel</p>
-          <p className="text-sm mt-1">กด + เพื่อสร้าง tunnel ใหม่</p>
+      ) : filteredTunnels.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8 text-zinc-600">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3.6 9h16.8M3.6 15h16.8" />
+              <path d="M12 3a14 14 0 014 9 14 14 0 01-4 9 14 14 0 01-4-9 14 14 0 014-9z" />
+            </svg>
+          </div>
+          {tunnels.length === 0 ? (
+            <>
+              <p className="text-zinc-300 font-medium">ยังไม่มี Tunnel</p>
+              <p className="text-zinc-400 text-sm mt-1">กด + เพื่อสร้าง tunnel แรก</p>
+            </>
+          ) : (
+            <>
+              <p className="text-zinc-300 font-medium">ไม่พบผลลัพธ์</p>
+              <p className="text-zinc-400 text-sm mt-1">ลองเปลี่ยน filter หรือคำค้นหา</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {tunnels.map(t => (
+          {filteredTunnels.map(t => (
             <TunnelCard key={t.name} tunnel={t} onRefresh={fetchTunnels} onToast={showToast} />
           ))}
         </div>
@@ -139,7 +238,7 @@ export default function DashboardPage() {
       {/* FAB */}
       <button
         onClick={() => setShowCreate(true)}
-        className="fixed bottom-24 right-5 w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-2xl shadow-xl flex items-center justify-center transition-colors z-40"
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 w-14 h-14 rounded-full bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-2xl shadow-glow-orange flex items-center justify-center transition-all duration-150 z-40 font-light"
         aria-label="สร้าง Tunnel"
       >
         +

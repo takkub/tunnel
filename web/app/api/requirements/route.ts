@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 
+export const dynamic = 'force-dynamic'
+
 function check(cmd: string): boolean {
   try { execSync(cmd, { stdio: 'ignore' }); return true } catch { return false }
 }

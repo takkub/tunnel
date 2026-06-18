@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { isDockerAvailable, getRuntimeMode, getEffectiveMode, setRuntimeMode } from '@/lib/runtime'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const mode = getRuntimeMode()
   const dockerAvailable = isDockerAvailable()

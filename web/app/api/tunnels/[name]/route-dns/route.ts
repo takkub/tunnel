@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { runScript } from '@/lib/scripts'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: Request, { params }: { params: { name: string } }) {
   try {
     const { hostname } = await req.json()

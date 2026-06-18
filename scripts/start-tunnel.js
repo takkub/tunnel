@@ -5,6 +5,25 @@ const readline = require('readline');
 const ui = require('./ui-helper');
 const { getEffectiveMode, dockerStart, nativeStart, getTunnelNames, getDockerTunnelNames } = require('./runtime');
 
+// Direct invocation: node start-tunnel.js <name> — skip interactive picker
+const directName = process.argv[2];
+if (directName) {
+  const mode = getEffectiveMode();
+  try {
+    if (mode === 'native') {
+      const pid = nativeStart(directName);
+      process.stdout.write(`Tunnel ${directName} started (pid ${pid})\n`);
+    } else {
+      dockerStart(directName);
+      process.stdout.write(`Tunnel ${directName} started\n`);
+    }
+    process.exit(0);
+  } catch (err) {
+    process.stderr.write(`Failed to start ${directName}: ${err.message}\n`);
+    process.exit(1);
+  }
+}
+
 function getAvailableTunnels(mode) {
     const names = mode === 'native' ? getTunnelNames() : getDockerTunnelNames();
     return names.sort().map(name => ({

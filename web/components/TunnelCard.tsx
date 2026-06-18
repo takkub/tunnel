@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import Button from './Button'
 
 interface Tunnel { name: string; running: boolean; hostname?: string }
 
@@ -16,12 +15,14 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   const [dnsHost, setDnsHost] = useState('')
   const [dnsLoading, setDnsLoading] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const busy = busyAction !== null
+  const hasHostname = !!(tunnel.hostname && tunnel.hostname !== 'cfd')
 
   const action = async (type: 'start' | 'stop' | 'delete') => {
     setBusyAction(type)
-    const method = type === 'start' || type === 'stop' ? 'POST' : 'DELETE'
+    const method = type === 'delete' ? 'DELETE' : 'POST'
     const url = type === 'delete'
       ? `/api/tunnels/${tunnel.name}`
       : `/api/tunnels/${tunnel.name}/${type}`
@@ -49,109 +50,165 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
     await onRefresh()
   }
 
+  const copyHostname = () => {
+    if (!tunnel.hostname) return
+    navigator.clipboard.writeText(tunnel.hostname)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   return (
-    <div className="bg-gray-900 rounded-2xl p-5 shadow-lg space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="font-bold text-lg text-gray-100">{tunnel.name}</span>
-        <span className={`text-xs px-3 py-1 rounded-full font-medium ${tunnel.running ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-400'}`}>
-          {tunnel.running ? 'กำลังทำงาน' : 'หยุด'}
-        </span>
-      </div>
+    <div className={`rounded-2xl overflow-hidden transition-all duration-200 ${
+      tunnel.running
+        ? 'bg-[#18181b] border border-zinc-800 border-l-4 border-l-emerald-500 shadow-glow-green'
+        : 'bg-[#18181b] border border-zinc-800 shadow-card'
+    }`}>
+      <div className="p-4 space-y-3">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-zinc-100 text-base truncate">{tunnel.name}</p>
+            {hasHostname && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <p className="text-xs text-zinc-400 truncate">{tunnel.hostname}</p>
+                <button
+                  onClick={copyHostname}
+                  aria-label="คัดลอก hostname"
+                  className="flex-shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
+                >
+                  {copied ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-emerald-400">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+            tunnel.running
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              tunnel.running ? 'bg-emerald-400 animate-pulse-dot' : 'bg-zinc-600'
+            }`} />
+            {tunnel.running ? 'Running' : 'Stopped'}
+          </div>
+        </div>
 
-      {tunnel.hostname && (
-        <p className="text-sm text-gray-400 truncate">{tunnel.hostname}</p>
-      )}
-
-      <div className="flex gap-2">
-        {tunnel.running
-          ? (
-            <Button
+        {/* Primary action */}
+        <div className="flex gap-2">
+          {tunnel.running ? (
+            <button
               onClick={() => action('stop')}
               disabled={busy}
-              loading={busyAction === 'stop'}
-              variant="secondary"
-              className="flex-1"
+              className="flex-1 min-h-[44px] rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-700 border border-zinc-700 text-zinc-200 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
             >
-              {busyAction === 'stop' ? 'กำลังหยุด...' : 'หยุด'}
-            </Button>
+              {busyAction === 'stop' && <span className="w-3.5 h-3.5 border-2 border-zinc-400/30 border-t-zinc-300 rounded-full animate-spin" />}
+              หยุด
+            </button>
           ) : (
-            <Button
+            <button
               onClick={() => action('start')}
               disabled={busy}
-              loading={busyAction === 'start'}
-              variant="primary"
-              className="flex-1 !bg-green-600 hover:!bg-green-700"
+              className="flex-1 min-h-[44px] rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-semibold hover:bg-emerald-500 hover:text-white hover:border-emerald-500 active:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
             >
-              {busyAction === 'start' ? 'กำลังเริ่ม...' : 'เริ่ม'}
-            </Button>
-          )
-        }
-        <button
-          onClick={() => { setShowDns(v => !v); setDnsHost('') }}
-          disabled={busy}
-          aria-label="Route DNS"
-          title="Route DNS"
-          className="min-h-[48px] w-12 rounded-xl bg-gray-800 hover:bg-blue-900 text-blue-400 text-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          🌐
-        </button>
-        {confirmDelete ? (
-          <>
+              {busyAction === 'start' && <span className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-300 rounded-full animate-spin" />}
+              เริ่ม
+            </button>
+          )}
+
+          {/* DNS button */}
+          <button
+            onClick={() => { setShowDns(v => !v); setDnsHost('') }}
+            disabled={busy}
+            aria-label="Route DNS"
+            title="Route DNS"
+            className={`min-h-[44px] w-11 rounded-xl border text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center ${
+              showDns
+                ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+            </svg>
+          </button>
+
+          {/* Delete button */}
+          {confirmDelete ? (
+            <>
+              <button
+                onClick={() => action('delete')}
+                disabled={busy}
+                className="min-h-[44px] px-3 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold disabled:opacity-40 transition-all duration-150 flex items-center gap-1"
+              >
+                {busyAction === 'delete'
+                  ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : 'ยืนยัน'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={busy}
+                className="min-h-[44px] w-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 disabled:opacity-40 transition-all duration-150 flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => action('delete')}
+              onClick={() => setConfirmDelete(true)}
               disabled={busy}
-              aria-label="ยืนยันลบ tunnel"
-              className="min-h-[48px] px-3 rounded-xl bg-red-700 hover:bg-red-600 text-white text-sm disabled:opacity-50 transition-colors"
+              aria-label="ลบ tunnel"
+              className="min-h-[44px] w-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-500 hover:border-red-800 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center"
             >
-              {busyAction === 'delete' ? '...' : 'ยืนยัน'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* DNS expand */}
+        {showDns && (
+          <div className="flex gap-2 items-center animate-slide-up">
+            <input
+              type="text"
+              value={dnsHost}
+              onChange={e => setDnsHost(e.target.value)}
+              placeholder="sub.example.com"
+              aria-label="Hostname สำหรับ DNS route"
+              className="flex-1 bg-zinc-900 text-zinc-100 text-sm rounded-xl px-3 py-2.5 outline-none border border-zinc-700 focus:border-blue-500 min-h-[44px] placeholder:text-zinc-500 transition-colors"
+              onKeyDown={e => e.key === 'Enter' && routeDns()}
+              autoFocus
+            />
+            <button
+              onClick={routeDns}
+              disabled={dnsLoading || !dnsHost.trim()}
+              className="px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium min-h-[44px] disabled:opacity-40 transition-all duration-150"
+            >
+              {dnsLoading ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : 'Set'}
             </button>
             <button
-              onClick={() => setConfirmDelete(false)}
-              disabled={busy}
-              aria-label="ยกเลิกการลบ"
-              className="min-h-[48px] w-12 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm disabled:opacity-50 transition-colors"
+              onClick={() => { setShowDns(false); setDnsHost('') }}
+              className="px-3 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 text-sm min-h-[44px] hover:text-zinc-300 transition-all duration-150"
             >
               ✕
             </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            disabled={busy}
-            aria-label="ลบ tunnel"
-            className="min-h-[48px] w-12 rounded-xl bg-gray-800 hover:bg-red-900 text-red-400 text-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            🗑️
-          </button>
+          </div>
         )}
       </div>
-
-      {showDns && (
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            value={dnsHost}
-            onChange={e => setDnsHost(e.target.value)}
-            placeholder="sub.sabuytube.xyz"
-            aria-label="Hostname สำหรับ DNS route"
-            className="flex-1 bg-gray-800 text-gray-100 text-sm rounded-xl px-3 py-2 outline-none border border-gray-700 focus:border-blue-500 min-h-[40px]"
-            onKeyDown={e => e.key === 'Enter' && routeDns()}
-          />
-          <button
-            onClick={routeDns}
-            disabled={dnsLoading || !dnsHost.trim()}
-            className="px-3 py-2 rounded-xl bg-blue-700 hover:bg-blue-600 text-white text-sm min-h-[40px] disabled:opacity-50"
-          >
-            {dnsLoading ? '...' : 'ยืนยัน'}
-          </button>
-          <button
-            onClick={() => { setShowDns(false); setDnsHost('') }}
-            className="px-3 py-2 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm min-h-[40px]"
-          >
-            ยกเลิก
-          </button>
-        </div>
-      )}
     </div>
   )
 }

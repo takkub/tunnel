@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Design review · tunnel (web admin)</title><style>
+:root{
+  --bg:#0e0e10;--panel:#18181b;--panel2:#1f1f23;--border:#27272a;
+  --fg:#e4e4e7;--muted:#a1a1aa;--dim:#71717a;
+  --high:#ef4444;--med:#f59e0b;--low:#52525b;--keep:#22c55e;--gold:#f5c542;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.6 "Segoe UI","Leelawadee UI",system-ui,sans-serif}
+a{color:#60a5fa;text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:980px;margin:0 auto;padding:28px 22px 80px}
+h1{font-size:22px;margin:0 0 6px;border-bottom:1px solid var(--border);padding-bottom:16px}
+h2{font-size:17px;margin:30px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+h3{font-size:15px;margin:18px 0 8px}
+p{color:var(--muted)}
+code{background:var(--panel2);border:1px solid var(--border);border-radius:4px;
+  padding:1px 5px;font:12.5px "Cascadia Mono","Consolas",monospace}
+pre{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  padding:12px 14px;overflow:auto}
+pre code{border:0;background:none;padding:0}
+strong{color:var(--fg)}
+blockquote{margin:18px 0;padding:12px 16px;border-radius:10px;
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
+blockquote p{color:#fcd34d;margin:4px 0}
+ul,ol{padding-left:0}
+li{list-style:none;background:var(--panel);border:1px solid var(--border);
+  border-left:4px solid var(--low);border-radius:10px;padding:11px 15px;margin:0 0 10px;color:var(--muted)}
+li strong:first-child{color:var(--fg)}
+li ul,li ol{margin-top:8px;padding-left:0}
+li li{background:var(--panel2);margin:6px 0;padding:7px 12px}
+li:has(.badge.high){border-left-color:var(--high)}
+li:has(.badge.med){border-left-color:var(--med)}
+li:has(.badge.low){border-left-color:var(--low)}
+ol.steps-numbered li{counter-increment:none}
+.badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;
+  border-radius:5px;text-transform:uppercase;white-space:nowrap}
+.badge.high{background:var(--high);color:#fff}
+.badge.med{background:var(--med);color:#3a2a00}
+.badge.low{background:var(--low);color:#fff}
+.meta{color:var(--muted);font-size:13px;margin:-4px 0 4px}
+figure{margin:22px 0 26px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#000}
+figure img{display:block;width:100%;height:auto}
+figcaption{padding:9px 14px;color:var(--muted);font-size:12px;background:var(--panel)}
+.missing-shot{padding:10px 14px;color:#fca5a5;background:rgba(239,68,68,.08);
+  border:1px solid rgba(239,68,68,.3);border-radius:8px;margin:10px 0;font-size:13px}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
+  color:var(--dim);font-size:12px}
+</style></head><body><div class="wrap"><div class="meta">2026-06-18 · tunnel (web admin) · critic (+ gemini second opinion)</div><div class="missing-shot">⚠ screenshot not found: <code>runtime/exports/2026-06-18/screenshots/dashboard.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>runtime/exports/2026-06-18/screenshots/dns.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>runtime/exports/2026-06-18/screenshots/logs.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>runtime/exports/2026-06-18/screenshots/settings.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>runtime/exports/2026-06-18/screenshots/setup.png</code></div><h1>UI review · tunnel web admin · 2026-06-18</h1>
+<h2>📸 Scope</h2>
+<p>Redesigned mobile web admin สำหรับ Cloudflare Tunnel Manager — 5 หน้า (Tunnels/Dashboard, DNS, Logs, Settings, Setup) viewport 390×844 dark theme. รีวิวเพื่อยกระดับให้ดู <strong>premium จริง</strong> + ใช้งานได้ลื่นบนมือถือ ก่อนส่งต่อ frontend implement. โฟกัสของที่ทำให้ดูโปรขึ้นชัดๆ ไม่ใช่ nitpick.</p>
+<p>โดยรวม foundation ดีมาก: palette near-black (<code>#09090b</code> / card <code>#18181b</code> / border <code>#27272a</code>) เป็น dark premium ที่ถูกทาง, radius สม่ำเสมอ (card <code>rounded-2xl</code>, button <code>rounded-xl</code>), touch target ส่วนใหญ่ ≥44px, มี safe-area-inset, skeleton loading + empty state ครบหลายหน้า. ปัญหาหลักไม่ใช่ "พื้นฐานพัง" แต่เป็น <strong>3 จุดที่ฉุดให้ดูยังไม่เสร็จ</strong>: (1) Dashboard เป็นกำแพงปุ่มเขียว 29 อันไม่มี hierarchy + ไม่มี search, (2) emoji icon + ปุ่ม disabled สีน้ำตาลขุ่นใน Settings, (3) ไม่มี font stack จริง (ใช้ system default).</p>
+<hr />
+<h2>✅ ของดีที่ควรเก็บไว้</h2>
+<ul>
+<li><strong>Palette dark premium</strong> — near-black + เลเยอร์ elevation บางๆ ทำได้ดี ไม่ใช่ grey เทาๆ ทั่วไป</li>
+<li><strong>Skeleton loading</strong> บน Dashboard + Settings (<code>animate-pulse</code>) — ละเอียด ดูโปร</li>
+<li><strong>Empty states</strong> — Dashboard ("ยังไม่มี Tunnel") + Logs ("กด เริ่ม Stream") มี copy + icon ครบ</li>
+<li><strong>Inline confirm delete</strong> บน TunnelCard (ยืนยัน/✕) — ปลอดภัยกว่า dialog, ไม่ขัดจังหวะ</li>
+<li><strong>Status pill + pulse dot</strong> บนการ์ด tunnel — affordance ชัด</li>
+<li><strong>safe-area-inset</strong> บน nav + FAB — ใส่ใจ detail มือถือจริง</li>
+<li><strong>Active nav state</strong> (สีส้ม + underline) — ตำแหน่งปัจจุบันชัด</li>
+</ul>
+<hr />
+<h2>➕ เพิ่ม</h2>
+<ul>
+<li><strong>[Dashboard] Search + filter chips (all / running / stopped)</strong> — มี 29 tunnels เรียงยาวเป็นพรืด หาตัวที่ต้องการต้อง scroll ทั้งจอ. เพิ่ม sticky search box ใต้ stats + chip filter. <span class="badge high">high</span></li>
+<li>before: รายการ 29 การ์ดไหลยาวอย่างเดียว</li>
+<li>
+<p>after: <code>&lt;input&gt;</code> กรองชื่อ + 3 chip (<code>rounded-full px-3 py-1 text-xs</code>) toggle running/stopped — ลด cognitive load มหาศาล</p>
+</li>
+<li>
+<p><strong>[Setup/Dashboard] รวม create flow ให้เหลือทางเดียว</strong> — ตอนนี้มี 2 ทางสร้าง tunnel ที่ซ้อนกัน: FAB (<code>+</code>) เปิด <code>CreateTunnelModal</code> กับหน้า <code>/setup</code> ทั้งหน้า. <code>/setup</code> ยัง <strong>ไม่อยู่ใน bottom nav</strong> เลย → orphaned. เลือกทางเดียว (แนะนำ modal) แล้วลบ/redirect อีกทาง. <span class="badge high">high</span></p>
+</li>
+<li>
+<p><strong>[Typography] เพิ่ม font stack จริง</strong> — ตอนนี้เป็น system default → ทำให้ดู "ยังไม่เสร็จ". ใส่ Inter (latin) + Noto Sans Thai / IBM Plex Sans Thai (ไทย) ผ่าน <code>next/font</code>. นี่คือ <strong>lever เดียวที่ยกระดับ premium ได้มากสุดต่อแรง</strong>. <span class="badge high">high</span></p>
+</li>
+<li>
+<p><strong>[DNS] leading icon ในแต่ละ action card</strong> — การ์ดมีแค่ label+desc ดูแบนๆ. เพิ่ม SVG line icon นำหน้า (ตรวจสอบ=search, CNAMEs=list, แก้ไข=wrench, ล้าง=trash) ให้สแกนเร็วขึ้น + ดูเป็นระบบ. <span class="badge med">med</span></p>
+</li>
+<li>
+<p><strong>[DNS] ใช้พื้นที่ว่างใต้ grid</strong> — หน้า DNS มีการ์ด 4 อันบน เหลือพื้นที่ว่างครึ่งจอ. ใส่ hint card "ผลลัพธ์จะแสดงที่นี่" หรือ last-run summary เพื่อ balance. <span class="badge low">low</span></p>
+</li>
+<li>
+<p><strong>[Header] ใช้พื้นที่ว่างฝั่งขวา</strong> — header สูง 56px มี logo+title ฝั่งซ้าย เหลือขวาว่างทั้งแถบ. ใส่ contextual action (refresh บน Dashboard / connection status) จะดูตั้งใจขึ้น. <span class="badge low">low</span></p>
+</li>
+<li>
+<p><strong>[Logs] filter bar (Error / Warn / Info)</strong> <em>(gemini)</em> — log บนมือถืออ่านยาก. เพิ่ม chip filter ระดับ log ด้านบน terminal เป็น must-have ของ admin tool จริง + ลงสีตาม level (แดง/เหลือง/เขียว) แทน emerald ล้วน. <span class="badge high">high</span></p>
+</li>
+<li>
+<p>file: <code>components/LogViewer.tsx</code></p>
+</li>
+<li>
+<p><strong>[Dashboard] system-wide busy / progress overlay ตอน Start All / Stop All</strong> <em>(gemini)</em> — ถ้ากด "เริ่มทั้งหมด" แล้วสลับไปหน้า Logs ระหว่างนั้น ผู้ใช้ไม่รู้ว่ากำลังทำงานอยู่ (Nielsen #1). เพิ่ม top progress bar / global busy indicator. <span class="badge med">med</span></p>
+</li>
+<li>
+<p><strong>[TunnelCard] copy-to-clipboard hostname</strong> <em>(gemini)</em> — หลัง route DNS เสร็จ เพิ่มไอคอน copy ข้างชื่อ hostname — บนมือถือ select+copy ลำบาก เป็น UX win ชัดๆ. <span class="badge med">med</span></p>
+</li>
+<li>
+<p><strong>[Empty/Setup] template selector / getting-started</strong> <em>(gemini)</em> — empty state ตอนนี้ "ปลอดภัย" แต่ยังเรียบ. เพิ่ม illustration หรือ template chip (Static Web / Proxy / Cloudflared) ให้เริ่มต้นง่ายและดู premium ขึ้น. <span class="badge low">low</span></p>
+</li>
+</ul>
+<hr />
+<h2>➖ ลบ</h2>
+<ul>
+<li>
+<p><strong>[Settings] emoji icons (⚡ 🐳 ⚙️)</strong> ใน Runtime Mode — ขัดกับ SVG line-icon system ที่ใช้ทั้งแอป (nav, การ์ด). โดยเฉพาะ 🐳 ดู toy-ish ฉุด premium. แทนด้วย SVG line icon ชุดเดียวกัน. <span class="badge high">high</span></p>
+</li>
+<li>
+<p><strong>[Dashboard] hostname placeholder "cfd" ใต้ทุกการ์ด</strong> — ทุก tunnel แสดง subtitle "cfd" เหมือนกันหมด → ดูเหมือน data พัง/placeholder ที่ลืมลบ. ถ้าไม่มี hostname จริงให้ <strong>ซ่อนบรรทัดนี้</strong> (มี guard <code>tunnel.hostname &amp;&amp;</code> อยู่แล้ว — ตรวจว่าทำไม "cfd" หลุดเข้ามา). <span class="badge high">high</span></p>
+</li>
+<li>
+<p><strong>[Dashboard] น้ำหนักปุ่มเขียวบนทุกการ์ด</strong> — 29 ปุ่ม solid emerald เต็มจอ = กำแพงเขียว ไม่มีอะไรเด่น ตาล้า. ไม่ใช่ลบปุ่ม แต่ลด "น้ำหนักภาพ": เปลี่ยน start เป็น ghost/outline emerald (<code>bg-emerald-500/10 border-emerald-500/30 text-emerald-400</code>) solid เฉพาะตอน hover. ให้สถานะ running เด่นแทน. <span class="badge high">high</span></p>
+</li>
+</ul>
+<hr />
+<h2>🔧 ปรับ</h2>
+<ul>
+<li><strong>[Settings] ปุ่ม disabled สีน้ำตาลขุ่น</strong> — <code>บันทึก</code> ใช้ <code>variant=primary</code> (orange) + <code>disabled:opacity-40</code> → ส้มจางเป็นน้ำตาลโคลน ดูเหมือน bug. แก้ที่ <code>Button.tsx</code>: disabled state ให้เป็น neutral (<code>disabled:bg-zinc-800 disabled:text-zinc-600 disabled:border disabled:border-zinc-700</code> แทน <code>opacity-40</code>). <span class="badge high">high</span></li>
+<li>
+<p>file: <code>web/components/Button.tsx:23</code></p>
+</li>
+<li>
+<p><strong>[ทั้งแอป] contrast ข้อความรอง/hint/placeholder</strong> — <code>text-zinc-600</code> (#52525b) บน <code>#18181b</code> ได้ ~2.8:1 → <strong>ตก WCAG AA</strong>. ใช้กับ empty-state hint ("กด + เพื่อสร้าง"), placeholder (<code>เช่น my-app</code>, <code>sub.example.com</code>). เปลี่ยน body/hint เป็น <code>zinc-400</code> (#a1a1aa, ~7:1) และ placeholder เป็น <code>zinc-500</code> (#71717a, ~4.6:1). <span class="badge med">med</span></p>
+</li>
+<li>
+<p>files: <code>app/page.tsx:151</code>, <code>app/setup/page.tsx:45</code>, <code>components/TunnelCard.tsx:165</code></p>
+</li>
+<li>
+<p><strong>[Dashboard] bulk-action row แน่นเกิน</strong> — <code>เริ่มทั้งหมด</code> + <code>หยุดทั้งหมด</code> + badge <code>native</code> ยัด 3 ก้อนในแถวเดียว ปุ่มถูกบีบ. ย้าย mode badge ขึ้นไปอยู่ข้าง stats bar หรือใน header แล้วให้ 2 ปุ่มเต็มความกว้าง. <span class="badge med">med</span></p>
+</li>
+<li>
+<p>file: <code>app/page.tsx:102-126</code></p>
+</li>
+<li>
+<p><strong>[Dashboard] ความหนาแน่นการ์ด</strong> — แต่ละการ์ดสูง (name + host + แถวปุ่ม 44px) → 29 อัน = scroll ยาวมาก. พิจารณา compact layout: ชื่อ+status ซ้าย / ปุ่มกระชับขวา ในแถวเดียว ให้เห็นต่อจอมากขึ้น (ระวังคง touch target). <span class="badge med">med</span></p>
+</li>
+<li>
+<p><strong>[Logs] มาตรฐานภาษาปุ่ม TH/EN</strong> — ปนกัน: "เริ่ม Stream" / "หยุด" / "ล้าง" / "Disconnected" / "Connected". เลือกแนวเดียว (แนะนำ action เป็นไทยล้วน: "เริ่ม"/"หยุด"/"ล้าง", status เป็นไทย "เชื่อมต่อแล้ว"/"ตัดการเชื่อมต่อ" หรือคงอังกฤษทั้งคู่). <span class="badge low">low</span></p>
+</li>
+<li>
+<p>file: <code>components/LogViewer.tsx:48,67</code></p>
+</li>
+<li>
+<p><strong>[Header] logo glyph เป็นรูปคน (silhouette หัว+ไหล่)</strong> — อ่านเป็น "account/profile" ไม่ใช่ tunnel/network. เปลี่ยนเป็น network/link/globe glyph ให้สื่อ brand ตรง. กรอบส้ม rounded ดีอยู่แล้ว เก็บไว้. <span class="badge med">med</span></p>
+</li>
+<li>
+<p>file: <code>app/client-layout.tsx:67-69</code></p>
+</li>
+<li>
+<p><strong>[Settings] ความเชื่อมโยง cloudflared ✗ ↔ Login Cloudflare</strong> — cloudflared ขาด (✗) แต่ปุ่ม Login อยู่คนละ section ไม่มีเส้นเชื่อม. เมื่อ requirement สำคัญ fail ควร highlight ปุ่ม Login หรือมี inline CTA ใต้รายการที่ ✗. <span class="badge low">low</span></p>
+</li>
+<li>
+<p><strong>[Dashboard] น้ำหนักภาพ stats bar</strong> <em>(gemini)</em> — ตัวเลข <code>text-2xl font-bold</code> 3 ก้อน อาจเด่นเกินจนกลบ content บนจอเล็ก. ลดเป็น <code>text-xl</code> หรือเพิ่ม contrast label↔value แทนการเพิ่มขนาด. <span class="badge low">low</span></p>
+</li>
+<li>
+<p>file: <code>app/page.tsx:86-97</code></p>
+</li>
+<li>
+<p><strong>[Dashboard] running card ให้ "pop" กว่าเส้นข้าง 4px</strong> <em>(gemini)</em> — ตอนนี้ running แยกด้วย <code>border-l-4 border-l-emerald-500</code> อย่างเดียว. เพิ่ม gradient bg จางๆ หรือ <code>shadow-glow-green</code> (มีใน config แล้ว) ให้การ์ดที่ทำงานอยู่เด่นจากกองที่หยุด. <span class="badge med">med</span></p>
+</li>
+<li>
+<p>file: <code>components/TunnelCard.tsx:52-56</code></p>
+</li>
+<li>
+<p><strong>[FAB] ตำแหน่งชน Tunnels tab / gesture bar</strong> <em>(gemini)</em> — FAB อยู่ขวาล่างเหนือ nav; บนเครื่อง gesture-bar อาจเบียดไอคอน/ขอบจอ. เพิ่ม margin จาก safe-area-inset ให้เผื่อมากขึ้น. <span class="badge low">low</span></p>
+</li>
+<li>file: <code>app/page.tsx:164</code></li>
+</ul>
+<hr />
+<h2>🚩 Heuristic violations (Nielsen)</h2>
+<ul>
+<li><strong>#6 Recognition rather than recall</strong> — Dashboard 29 tunnels ไม่มี search/filter → ผู้ใช้ต้องจำว่าตัวไหนอยู่ตรงไหนแล้วไล่หาเอง. แก้: search + filter chips (ดู ➕ ข้อแรก)</li>
+<li><strong>#8 Aesthetic &amp; minimalist design</strong> — กำแพงปุ่มเขียว 29 อัน + subtitle "cfd" ซ้ำทุกการ์ด = visual noise ไม่มี signal. แก้: ghost start button + ซ่อน hostname ปลอม</li>
+<li><strong>#4 Consistency &amp; standards</strong> — (a) emoji vs SVG icon, (b) 2 create flow (modal + /setup), (c) TH/EN ปนในปุ่ม Logs. แก้: unify ทั้ง 3</li>
+<li><strong>#1 Visibility of system status</strong> — disabled <code>บันทึก</code> สีน้ำตาลขุ่น สื่อสถานะผิด (ดูเหมือน error ไม่ใช่ "ยังไม่มีอะไรเปลี่ยน"). แก้: neutral disabled style</li>
+<li><strong>#5 Error prevention</strong> — มีแล้ว (inline confirm delete) ✅ เก็บไว้</li>
+</ul>
+<hr />
+<h2>🎯 Recommended next steps (สำหรับ Lead)</h2>
+<ol>
+<li><strong>[high]</strong> delegate frontend → Dashboard: เพิ่ม search + filter chips, เปลี่ยน start เป็น ghost emerald, ซ่อน "cfd" placeholder (<code>app/page.tsx</code>, <code>components/TunnelCard.tsx</code>)</li>
+<li><strong>[high]</strong> delegate frontend → Settings: เปลี่ยน emoji เป็น SVG line icon + แก้ disabled button style ใน <code>Button.tsx</code> (กระทบทั้งแอป)</li>
+<li><strong>[high]</strong> delegate frontend → เพิ่ม font stack (Inter + Noto/IBM Plex Sans Thai) ผ่าน <code>next/font</code> ใน <code>app/layout.tsx</code></li>
+<li><strong>[high]</strong> ตัดสินใจ create flow: คง modal อย่างเดียว แล้ว redirect/ลบ <code>/setup</code> (หรือเพิ่มเข้า nav) — กระทบ routing/backend? ตรวจกับ frontend+backend</li>
+<li><strong>[high]</strong> delegate frontend → Logs: filter bar (Error/Warn/Info) + ลงสีตาม level <em>(gemini — must-have admin tool)</em></li>
+<li><strong>[med]</strong> delegate frontend → contrast pass: <code>zinc-600</code> → <code>zinc-400/500</code> ตาม a11y (หลายไฟล์)</li>
+<li><strong>[med]</strong> delegate frontend → DNS: leading icons + balance พื้นที่ว่าง; Dashboard bulk-row: ย้าย mode badge; running-card glow; copy-hostname; global busy overlay <em>(gemini)</em></li>
+<li><strong>[low]</strong> Logs: standardize TH/EN; Header: เปลี่ยน logo glyph + ใช้พื้นที่ขวา; stats font weight; FAB safe-area margin; template selector</li>
+</ol><footer>Generated by agent_takkub.design_review_html · self-contained (screenshots inlined) · open in any browser</footer></div></body></html>

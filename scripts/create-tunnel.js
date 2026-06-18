@@ -1,6 +1,7 @@
 const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { generateLaunchers } = require('./runtime');
 
 const [tunnelName, hostname, port] = process.argv.slice(2);
 
@@ -83,8 +84,8 @@ ingress:
   - service: http_status:404
 `);
 
-  // docker-compose
-  fs.writeFileSync(path.join(projectRoot, `docker-compose-cloudflare-${tunnelName}.yml`), `version: '3.8'
+  // docker-compose inside tunnel folder (volume . = this folder)
+  fs.writeFileSync(path.join(configDir, 'docker-compose.yml'), `version: '3.8'
 services:
   cloudflared-${tunnelName}:
     image: cloudflare/cloudflared:latest
@@ -92,10 +93,12 @@ services:
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
     volumes:
-      - ./tunnels/${tunnelName}:/etc/cloudflared
+      - .:/etc/cloudflared
     extra_hosts:
       - "host.docker.internal:host-gateway"
 `);
+
+  generateLaunchers(tunnelName);
 
   process.stdout.write(`CREATED:${tunnelId}\n`);
 } catch (err) {

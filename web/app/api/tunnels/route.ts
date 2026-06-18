@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { runScript } from '@/lib/scripts'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     // tunnel-status.js handles both docker (exact container name match) and native (.pid) modes

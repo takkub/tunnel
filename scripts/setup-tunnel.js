@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const ui = require('./ui-helper');
 const readline = require('readline');
+const { generateLaunchers } = require('./runtime');
 
 if (process.env.CI === '1' || !process.stdin.isTTY) {
   console.error('interactive mode required, run from terminal');
@@ -268,8 +269,8 @@ ingress:
   ui.step(7, 7, `${ui.icons.rocket} Generating run scripts...`);
 
   if (!isWindows) {
-    // Create docker-compose file
-    const dockerComposeFile = `docker-compose-cloudflare-${folderName}.yml`;
+    // Create docker-compose inside tunnel folder (volume . = this folder)
+    const composeFilePath = path.join(configDir, 'docker-compose.yml');
     const dockerComposeContent = `version: '3.8'
 
 services:
@@ -279,12 +280,15 @@ services:
     restart: unless-stopped
     command: tunnel --config /etc/cloudflared/config.yml run
     volumes:
-      - ./tunnels/${folderName}:/etc/cloudflared
+      - .:/etc/cloudflared
     extra_hosts:
       - "host.docker.internal:host-gateway"
 `;
-    fs.writeFileSync(path.join(projectRoot, dockerComposeFile), dockerComposeContent);
-    ui.subStep(`Created: ${dockerComposeFile}`, 'success');
+    fs.writeFileSync(composeFilePath, dockerComposeContent);
+    ui.subStep(`Created: tunnels/${folderName}/docker-compose.yml`, 'success');
+
+    generateLaunchers(folderName);
+    ui.subStep(`Created: tunnels/${folderName}/start.{bat,sh,command}`, 'success');
 
     ui.complete('Setup Complete!');
     ui.summaryBox('Tunnel Information', [
@@ -295,7 +299,7 @@ services:
     ]);
 
     ui.nextSteps([
-      `Start: ${ui.c.cyan}docker-compose -f ${dockerComposeFile} up -d${ui.c.reset}`,
+      `Start: ${ui.c.cyan}docker compose -f tunnels/${folderName}/docker-compose.yml up -d${ui.c.reset}`,
       `Logs: ${ui.c.cyan}docker logs -f cloudflared-tunnel-${folderName}${ui.c.reset}`
     ]);
 
@@ -310,7 +314,6 @@ services:
     if (startNow) {
       console.log('');
       ui.section('Starting Tunnel...');
-      const composeFilePath = path.join(projectRoot, dockerComposeFile);
 
       try {
         execSync(`docker compose -f "${composeFilePath}" up -d`, {
@@ -335,7 +338,7 @@ services:
         console.log('');
 
         ui.section('Manual Start:');
-        ui.command(`docker-compose -f ${dockerComposeFile} up -d`);
+        ui.command(`docker compose -f tunnels/${folderName}/docker-compose.yml up -d`);
         console.log('');
       }
     }

@@ -15,7 +15,6 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // auto-fill subdomain from tunnel name (strip -tunnel suffix)
   useEffect(() => {
     if (!subdomain) {
       const base = name.replace(/-tunnel$/, '')
@@ -46,24 +45,33 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
     }
   }
 
-  const inputClass = 'w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-4 text-base text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500'
+  const inputClass = 'w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3.5 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors'
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}
     >
       <div
-        className="fixed inset-x-0 bottom-0 rounded-t-3xl max-h-[90vh] overflow-y-auto bg-gray-900 p-6
-                   md:relative md:inset-auto md:rounded-2xl md:max-h-none md:w-full md:max-w-md md:shadow-2xl"
+        className="w-full rounded-t-3xl max-h-[92vh] overflow-y-auto p-6 animate-slide-up
+                   md:relative md:rounded-2xl md:max-h-none md:max-w-md md:shadow-2xl"
+        style={{ background: '#18181b', border: '1px solid #27272a' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="mx-auto mb-4 w-10 h-1 rounded-full bg-gray-700 md:hidden" />
-        <h2 className="text-xl font-bold text-gray-100 mb-5">สร้าง Tunnel ใหม่</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* Drag handle */}
+        <div className="mx-auto mb-5 w-10 h-1 rounded-full bg-zinc-700 md:hidden" />
 
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-zinc-100">สร้าง Tunnel ใหม่</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center justify-center text-sm transition-colors">
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">ชื่อ Tunnel</label>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wide">ชื่อ Tunnel</label>
             <input
               type="text"
               required
@@ -75,25 +83,28 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Subdomain</label>
-            <div className="flex items-center bg-gray-800 border border-gray-700 rounded-xl overflow-hidden focus-within:border-blue-500">
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wide">Subdomain</label>
+            <div className="flex items-center bg-zinc-950 border border-zinc-700 rounded-xl overflow-hidden focus-within:border-orange-500/60 transition-colors">
               <input
                 type="text"
                 required
                 placeholder="myapp"
                 value={subdomain}
                 onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                className="flex-1 bg-transparent px-4 py-4 text-base text-gray-100 placeholder-gray-500 focus:outline-none"
+                className="flex-1 bg-transparent px-4 py-3.5 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none"
               />
-              <span className="pr-4 text-gray-400 text-base whitespace-nowrap">.{DOMAIN}</span>
+              <span className="pr-4 text-zinc-500 text-sm whitespace-nowrap">.{DOMAIN}</span>
             </div>
             {hostname && (
-              <p className="mt-1 text-xs text-blue-400">→ {hostname}</p>
+              <p className="mt-1.5 text-xs text-orange-400/80 flex items-center gap-1">
+                <span>→</span>
+                <span className="font-mono">{hostname}</span>
+              </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Port (local)</label>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wide">Local Port</label>
             <input
               type="number"
               required
@@ -104,21 +115,27 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
             />
           </div>
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && (
+            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+              <span className="text-red-500">✗</span>
+              {error}
+            </div>
+          )}
 
-          <div className="flex flex-col gap-2 mt-2">
+          <div className="flex flex-col gap-2 mt-1">
             <button
               type="submit"
               disabled={loading || !hostname}
-              className="min-h-[48px] w-full rounded-xl bg-blue-600 text-white text-base font-medium hover:bg-blue-500 disabled:opacity-50 transition"
+              className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-base font-semibold disabled:opacity-40 transition-all duration-150 flex items-center justify-center gap-2"
             >
-              {loading ? 'กำลังสร้าง...' : 'สร้าง'}
+              {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {loading ? 'กำลังสร้าง...' : 'สร้าง Tunnel'}
             </button>
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="min-h-[48px] w-full rounded-xl bg-gray-800 text-gray-300 text-base hover:bg-gray-700 disabled:opacity-50 transition"
+              className="min-h-[44px] w-full rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 text-base hover:bg-zinc-700 disabled:opacity-40 transition-all duration-150"
             >
               ยกเลิก
             </button>
