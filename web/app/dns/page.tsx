@@ -79,7 +79,7 @@ export default function DnsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="max-w-2xl space-y-5">
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       <div className="grid grid-cols-2 gap-3">

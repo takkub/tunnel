@@ -105,7 +105,7 @@ export default function SettingsPage() {
   }, [])
 
   return (
-    <div className="max-w-xl space-y-3">
+    <div className="max-w-xl space-y-4">
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       {/* Runtime Mode */}

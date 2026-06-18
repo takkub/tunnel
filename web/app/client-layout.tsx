@@ -1,12 +1,15 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 
-function IconHome({ className }: { className?: string }) {
+function IconTunnel({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3.6 9h16.8M3.6 15h16.8" />
+      <path d="M12 3a14 14 0 014 9 14 14 0 01-4 9 14 14 0 01-4-9 14 14 0 014-9z" />
     </svg>
   )
 }
@@ -21,15 +24,6 @@ function IconGlobe({ className }: { className?: string }) {
   )
 }
 
-function IconTerminal({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="4 17 10 11 4 5" />
-      <line x1="12" y1="19" x2="20" y2="19" />
-    </svg>
-  )
-}
-
 function IconSettings({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -39,71 +33,125 @@ function IconSettings({ className }: { className?: string }) {
   )
 }
 
+function IconMenu({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  )
+}
+
 const navItems = [
-  { href: '/', label: 'Tunnels', Icon: IconHome },
+  { href: '/', label: 'Tunnels', Icon: IconTunnel },
   { href: '/dns', label: 'DNS', Icon: IconGlobe },
-  { href: '/logs', label: 'Logs', Icon: IconTerminal },
   { href: '/settings', label: 'Settings', Icon: IconSettings },
 ]
 
 const pageTitles: Record<string, string> = {
-  '/': 'Tunnel Manager',
+  '/': 'Tunnels',
   '/dns': 'DNS',
-  '/logs': 'Logs',
   '/settings': 'Settings',
   '/setup': 'Setup',
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const title = pageTitles[pathname] ?? 'Tunnel Manager'
+  const toggleBtnRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
+  const wasOpenRef = useRef(false)
+
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [sidebarOpen])
+
+  useEffect(() => {
+    if (sidebarOpen) {
+      wasOpenRef.current = true
+      const first = sidebarRef.current?.querySelector<HTMLElement>(
+        'a, button, [tabindex]:not([tabindex="-1"])'
+      )
+      first?.focus()
+    } else if (wasOpenRef.current) {
+      toggleBtnRef.current?.focus()
+    }
+  }, [sidebarOpen])
 
   return (
-    <>
-      <header className="sticky top-0 z-50 h-14 flex items-center px-4 gap-3"
-        style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #27272a' }}>
-        <div className="flex items-center gap-2.5 flex-1">
+    <div className="flex h-screen overflow-hidden bg-zinc-950">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside id="sidebar-nav" ref={sidebarRef} className={`fixed inset-y-0 left-0 z-50 w-56 flex flex-col border-r border-zinc-800/60 transition-transform duration-200 lg:static lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ background: '#0c0c0e' }}>
+        {/* Logo */}
+        <div className="h-14 flex items-center px-4 gap-3 border-b border-zinc-800/60 shrink-0">
           <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center shadow-glow-orange flex-shrink-0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-white">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3.6 9h16.8M3.6 15h16.8" />
-              <path d="M12 3a14 14 0 014 9 14 14 0 01-4 9 14 14 0 01-4-9 14 14 0 014-9z" />
-            </svg>
+            <IconTunnel className="w-4 h-4 text-white" />
           </div>
-          <span className="font-semibold text-zinc-100 text-base tracking-tight">{title}</span>
+          <span className="font-semibold text-zinc-100 text-sm tracking-tight">Tunnel Manager</span>
         </div>
-      </header>
 
-      <main className="p-4 pb-24">{children}</main>
+        {/* Nav */}
+        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+          {navItems.map(({ href, label, Icon }) => {
+            const active = pathname === href
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                  active
+                    ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                {label}
+              </Link>
+            )
+          })}
+        </nav>
+      </aside>
 
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-50 flex w-full"
-        style={{
-          background: 'rgba(9,9,11,0.92)',
-          backdropFilter: 'blur(16px)',
-          borderTop: '1px solid #27272a',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-      >
-        {navItems.map(({ href, label, Icon }) => {
-          const active = pathname === href
-          return (
-            <a
-              key={href}
-              href={href}
-              className={`relative flex flex-col items-center justify-center flex-1 py-2.5 gap-1 text-xs font-medium transition-all duration-150 ${
-                active ? 'text-orange-400' : 'text-zinc-500 hover:text-zinc-300 active:text-zinc-200'
-              }`}
-            >
-              <Icon className={`w-5 h-5 transition-all duration-150 ${active ? 'stroke-orange-400' : ''}`} />
-              <span className="leading-none">{label}</span>
-              {active && (
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-orange-400 rounded-full" />
-              )}
-            </a>
-          )
-        })}
-      </nav>
-    </>
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top bar */}
+        <header className="h-14 flex items-center px-4 gap-3 border-b border-zinc-800/60 shrink-0"
+          style={{ background: 'rgba(9,9,11,0.95)', backdropFilter: 'blur(8px)' }}>
+          <button
+            ref={toggleBtnRef}
+            onClick={() => setSidebarOpen(v => !v)}
+            className="lg:hidden text-zinc-400 hover:text-zinc-200 transition-colors p-1 -ml-1 rounded-lg"
+            aria-label="Toggle sidebar"
+            aria-expanded={sidebarOpen}
+            aria-controls="sidebar-nav"
+          >
+            <IconMenu className="w-5 h-5" />
+          </button>
+          <h1 className="text-sm font-semibold text-zinc-200">{title}</h1>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto p-5">
+          {children}
+        </main>
+      </div>
+    </div>
   )
 }

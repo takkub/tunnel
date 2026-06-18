@@ -58,23 +58,23 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   }
 
   return (
-    <div className={`rounded-2xl overflow-hidden transition-all duration-200 ${
+    <div className={`rounded-xl overflow-hidden transition-all duration-200 ${
       tunnel.running
-        ? 'bg-[#18181b] border border-zinc-800 border-l-4 border-l-emerald-500 shadow-glow-green'
-        : 'bg-[#18181b] border border-zinc-800 shadow-card'
+        ? 'bg-[#18181b] border border-zinc-800 border-l-[3px] border-l-emerald-500'
+        : 'bg-[#18181b] border border-zinc-800'
     }`}>
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2.5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-zinc-100 text-base truncate">{tunnel.name}</p>
+            <p className="font-semibold text-zinc-100 text-sm truncate">{tunnel.name}</p>
             {hasHostname && (
               <div className="flex items-center gap-1 mt-0.5">
-                <p className="text-xs text-zinc-400 truncate">{tunnel.hostname}</p>
+                <p className="text-xs text-zinc-500 truncate">{tunnel.hostname}</p>
                 <button
                   onClick={copyHostname}
                   aria-label="คัดลอก hostname"
-                  className="flex-shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  className="flex-shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
                 >
                   {copied ? (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-emerald-400">
@@ -90,7 +90,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               </div>
             )}
           </div>
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
             tunnel.running
               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
               : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
@@ -102,24 +102,24 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
           </div>
         </div>
 
-        {/* Primary action */}
-        <div className="flex gap-2">
+        {/* Actions row */}
+        <div className="flex gap-1.5">
           {tunnel.running ? (
             <button
               onClick={() => action('stop')}
               disabled={busy}
-              className="flex-1 min-h-[44px] rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-700 border border-zinc-700 text-zinc-200 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
+              className="flex-1 min-h-[44px] rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-1.5"
             >
-              {busyAction === 'stop' && <span className="w-3.5 h-3.5 border-2 border-zinc-400/30 border-t-zinc-300 rounded-full animate-spin" />}
+              {busyAction === 'stop' && <span className="w-3 h-3 border-2 border-zinc-400/30 border-t-zinc-300 rounded-full animate-spin" />}
               หยุด
             </button>
           ) : (
             <button
               onClick={() => action('start')}
               disabled={busy}
-              className="flex-1 min-h-[44px] rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-semibold hover:bg-emerald-500 hover:text-white hover:border-emerald-500 active:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
+              className="flex-1 min-h-[44px] rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500 hover:text-white hover:border-emerald-500 active:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-1.5"
             >
-              {busyAction === 'start' && <span className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-300 rounded-full animate-spin" />}
+              {busyAction === 'start' && <span className="w-3 h-3 border-2 border-emerald-400/30 border-t-emerald-300 rounded-full animate-spin" />}
               เริ่ม
             </button>
           )}
@@ -130,13 +130,13 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
             disabled={busy}
             aria-label="Route DNS"
             title="Route DNS"
-            className={`min-h-[44px] w-11 rounded-xl border text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center ${
+            className={`min-h-[44px] w-11 rounded-lg border text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center ${
               showDns
                 ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
                 : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
             }`}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
               <circle cx="12" cy="12" r="10" />
               <line x1="2" y1="12" x2="22" y2="12" />
               <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
@@ -149,7 +149,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               <button
                 onClick={() => action('delete')}
                 disabled={busy}
-                className="min-h-[44px] px-3 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold disabled:opacity-40 transition-all duration-150 flex items-center gap-1"
+                className="min-h-[44px] px-3 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold disabled:opacity-40 transition-all duration-150 flex items-center gap-1"
               >
                 {busyAction === 'delete'
                   ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -158,7 +158,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               <button
                 onClick={() => setConfirmDelete(false)}
                 disabled={busy}
-                className="min-h-[44px] w-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 disabled:opacity-40 transition-all duration-150 flex items-center justify-center text-sm"
+                className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 disabled:opacity-40 transition-all duration-150 flex items-center justify-center text-xs"
               >
                 ✕
               </button>
@@ -168,9 +168,9 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               onClick={() => setConfirmDelete(true)}
               disabled={busy}
               aria-label="ลบ tunnel"
-              className="min-h-[44px] w-11 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-500 hover:border-red-800 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center"
+              className="min-h-[44px] w-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-500 hover:border-red-800 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
                 <path d="M10 11v6M14 11v6" />
@@ -182,27 +182,27 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
 
         {/* DNS expand */}
         {showDns && (
-          <div className="flex gap-2 items-center animate-slide-up">
+          <div className="flex gap-1.5 items-center animate-slide-up">
             <input
               type="text"
               value={dnsHost}
               onChange={e => setDnsHost(e.target.value)}
               placeholder="sub.example.com"
               aria-label="Hostname สำหรับ DNS route"
-              className="flex-1 bg-zinc-900 text-zinc-100 text-sm rounded-xl px-3 py-2.5 outline-none border border-zinc-700 focus:border-blue-500 min-h-[44px] placeholder:text-zinc-500 transition-colors"
+              className="flex-1 bg-zinc-900 text-zinc-100 text-xs rounded-lg px-3 outline-none border border-zinc-700 focus:border-blue-500 min-h-[44px] placeholder:text-zinc-500 transition-colors"
               onKeyDown={e => e.key === 'Enter' && routeDns()}
               autoFocus
             />
             <button
               onClick={routeDns}
               disabled={dnsLoading || !dnsHost.trim()}
-              className="px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium min-h-[44px] disabled:opacity-40 transition-all duration-150"
+              className="px-3 min-h-[44px] rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium disabled:opacity-40 transition-all duration-150"
             >
-              {dnsLoading ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : 'Set'}
+              {dnsLoading ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : 'Set'}
             </button>
             <button
               onClick={() => { setShowDns(false); setDnsHost('') }}
-              className="px-3 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-400 text-sm min-h-[44px] hover:text-zinc-300 transition-all duration-150"
+              className="px-2.5 min-h-[44px] rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs hover:text-zinc-300 transition-all duration-150"
             >
               ✕
             </button>
