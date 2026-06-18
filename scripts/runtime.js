@@ -1,5 +1,5 @@
 // Shared runtime helper: mode detection + docker/native operations
-const { execSync, spawn } = require('child_process');
+const { execSync, spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -81,6 +81,51 @@ function dockerStatus(name) {
   } catch {
     return false;
   }
+}
+
+// Fetch all running docker container names at once (Set) — call once, reuse across tunnels
+function getDockerContainerNames() {
+  try {
+    const out = execSync('docker ps --format "{{.Names}}"', { encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
+    return new Set(out.split('\n').map(l => l.trim()).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+// Fetch all running cloudflared process command lines at once — call once, reuse across tunnels
+function getCloudflaredProcesses() {
+  try {
+    if (process.platform === 'win32') {
+      const r = spawnSync('powershell', [
+        '-NoProfile', '-NonInteractive', '-Command',
+        "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'cloudflared.exe' } | ForEach-Object { $_.CommandLine }",
+      ], { encoding: 'utf8', timeout: 10000 });
+      if (!r.stdout) return [];
+      return r.stdout.split('\n').filter(l => l.trim()).map(l => ({ cmdline: l.trim() }));
+    } else {
+      const r = spawnSync('ps', ['-eo', 'args'], { encoding: 'utf8', timeout: 5000 });
+      if (!r.stdout) return [];
+      return r.stdout.split('\n').filter(l => l.includes('cloudflared')).map(l => ({ cmdline: l.trim() }));
+    }
+  } catch {
+    return [];
+  }
+}
+
+// Check if a tunnel is running natively — checks .pid first, then falls back to process scan.
+// Pass the result of getCloudflaredProcesses() so we only spawn once per status cycle.
+function nativeRunning(name, processes) {
+  const pidFile = path.join(TUNNELS_DIR, name, '.pid');
+  if (fs.existsSync(pidFile)) {
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+    try { process.kill(pid, 0); return true; } catch {}
+    // stale .pid — fall through to process scan
+  }
+  if (!processes || !processes.length) return false;
+  const fragment = path.join('tunnels', name, 'config.yml');   // OS-native separators
+  const fragmentFwd = `tunnels/${name}/config.yml`;             // forward-slash form (launchers)
+  return processes.some(p => p.cmdline.includes(fragment) || p.cmdline.includes(fragmentFwd));
 }
 
 // Resolve local credentials file for a tunnel (bypasses docker-only path in config.yml)
@@ -232,9 +277,12 @@ module.exports = {
   dockerStart,
   dockerStop,
   dockerStatus,
+  getDockerContainerNames,
   nativeStart,
   nativeStop,
   nativeStatus,
+  getCloudflaredProcesses,
+  nativeRunning,
   getTunnelNames,
   getDockerTunnelNames,
   generateLaunchers,

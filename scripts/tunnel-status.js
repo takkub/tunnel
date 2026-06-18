@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { getEffectiveMode, dockerStatus, nativeStatus, TUNNELS_DIR } = require('./runtime');
+const { getDockerContainerNames, getCloudflaredProcesses, nativeRunning, TUNNELS_DIR } = require('./runtime');
 
 const filterName = process.argv[2] || null;
 
@@ -23,12 +23,15 @@ function getTunnelFolders() {
   );
 }
 
-const mode = getEffectiveMode();
 const folders = getTunnelFolders().filter(n => !filterName || n === filterName);
+
+// Gather state once — reused for all tunnels (no per-tunnel subprocess spawning)
+const dockerContainers = getDockerContainerNames();
+const nativeProcesses = getCloudflaredProcesses();
 
 const tunnels = folders.map(name => ({
   name,
-  running: mode === 'native' ? nativeStatus(name) : dockerStatus(name),
+  running: dockerContainers.has(`cloudflared-tunnel-${name}`) || nativeRunning(name, nativeProcesses),
   hostname: getHostnameFromConfig(name),
 }));
 
