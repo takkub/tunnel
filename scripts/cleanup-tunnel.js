@@ -220,7 +220,7 @@ async function main() {
   const dockerPath = path.join(projectRoot, dockerFile);
 
   if (fs.existsSync(dockerPath)) {
-    const stopped = exec(`docker-compose -f "${dockerPath}" down`);
+    const stopped = exec(`docker compose -f "${dockerPath}" down`);
     if (stopped !== null) {
       ui.subStep('Stopped Docker container', 'success');
       success.push('Stopped Docker container');

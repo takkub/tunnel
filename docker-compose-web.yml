@@ -1,0 +1,12 @@
+services:
+  tunnel-web:
+    build:
+      context: ./web
+    ports:
+      - "8888:3000"
+    volumes:
+      - ./scripts:/app/scripts
+      - ./tunnels:/app/tunnels
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /app/web
+    restart: unless-stopped

@@ -1,57 +1,87 @@
 # Dependencies
-node_modules/
+/node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnp
+/.pnp
 .pnp.js
 package-lock.json
-
 # Build output
-dist/
-build/
-out-tsc/
-tmp/
-.tmp/
-.cache/
-coverage/
-
-# Environment & Secrets
-.env
-.env.local
-.env.*.local
-
-# Cloudflare credentials & binaries
-cloudflared.exe
-cloudflared
-tunnels/
-
-# Docker compose (user-generated per tunnel)
-docker-compose-cloudflare-*.yml
-
+/dist
+/build
+/out-tsc
+/tmp
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 .idea/
+.idea/*
 *.iml
 *.swp
 *.swo
 *~
-
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
+*.pem
+# Keep config files
+!tunnels/**/config.yml
+!package.json
+!tsconfig.json
+# Docker
+.docker
+# Environment
+.env
+.env.local
+.env.*.local
+# Logs
+logs
+*.log
+# Temporary files
+*.tmp
+*.temp
+.cache
 
-# AI agent config (local use only)
-.agent/
+# Node.js / TypeScript
+node_modules/
+dist/
+build/
+.tmp/
+.cache/
+coverage/
+
+# Env & secrets
+.env
+.env
+*.pem
+cert.pem
+*.key
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Certificates & Keys
-*.pem
-*.key
+# Cloudflare & Tunnel artifacts
+cloudflared.exe
+.tunnel/
+.tunnel-*
+# Tunnel configs and credentials
+#/tunnels/**/cert.pem
+#/tunnels/**/config.yml
+/tunnels/**/**/*.json
 
 # Docker
 *.pid
@@ -59,6 +89,17 @@ logs/
 *.pid.lock
 
 # Misc
+*.swp
+*.swo
 *.tmp
-*.temp
 *.bak
+
+# Ignore generated summaries
+FINAL_SUMMARY.md
+SETUP_SUMMARY.md
+CHANGELOG.md
+ERROR_1033_FIX.md
+CNAME_FIX.md
+
+web/.next/
+/runtime.config.json

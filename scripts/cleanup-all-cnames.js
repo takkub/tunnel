@@ -3,10 +3,10 @@ const { listDnsRecords, deleteDnsRecord } = require('./cloudflare-api');
 const ui = require('./ui-helper');
 const readline = require('readline');
 
-// Force stdin to resume
-try {
-    process.stdin.resume();
-} catch (e) { }
+if (process.env.CI === '1' || !process.stdin.isTTY) {
+    console.error('interactive mode required, run from terminal');
+    process.exit(1);
+}
 
 const rl = readline.createInterface({
     input: process.stdin,

@@ -1,164 +1,88 @@
-# ☁️ Cloudflare Tunnel Manager
+# Tunnel Management Scripts
 
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+Automation to manage Cloudflare tunnels across Windows, macOS, and Linux — via Docker or native `cloudflared`.
 
-> **Interactive CLI tool** to create, manage, and delete [Cloudflare Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) — with Docker support and a beautiful terminal UI.
+## Requirements
 
----
+| Requirement | Windows | macOS | Linux |
+|---|---|---|---|
+| Node.js 18+ | [nodejs.org](https://nodejs.org) | `brew install node` | `apt install nodejs npm` |
+| cloudflared | `cloudflared.exe` bundled in repo | `brew install cloudflared` | package manager |
+| Docker (optional) | Docker Desktop | Docker Desktop | Docker Engine |
 
-## 📸 Preview
+## One-Click Launchers
 
-```text
-╔══════════════════════════════════════════════════════════════╗
-║                  Cloudflare Tunnel Manager                   ║
-╚══════════════════════════════════════════════════════════════╝
-Use Up/Down to navigate, Enter to select
+### Open Web UI (recommended)
 
-  🚀 Status & Start
-    Show Status              View tunnel & docker status
-    Start Tunnels            Start all tunnels (docker up)
-    Stop Tunnels             Stop all tunnels (docker down)
-
-  ⚙️  Management
-  → Setup New Tunnel         Create & configure a new tunnel
-    Delete Tunnel            Remove an existing tunnel
-    Login to Cloudflare      Authenticate with Cloudflare
-
-  🔧 Utilities
-    Check Requirements       Verify system dependencies
-    Check DNS                Inspect DNS records
-    Cleanup All CNAMEs       Delete ALL tunnel CNAMEs
-
-  ❌ Exit
-    Exit                     Close this menu
-```
-
----
-
-## ✨ Features
-
-- 🚀 **Interactive Menu** — Arrow-key driven TUI for all operations
-- ⚙️ **Setup Wizard** — Create tunnels with auto-generated configs
-- 🐳 **Docker First** — Auto-generates `docker-compose` files per tunnel
-- 🔗 **DNS Management** — Auto-create/delete DNS routes & CNAME records
-- 📊 **Status Dashboard** — View all tunnels and Docker containers at a glance
-- 🗑️ **Smart Cleanup** — Delete tunnels, DNS routes, CNAMEs, and local files in one go
-- 🎨 **Beautiful UI** — Color-coded output with progress indicators
-
----
-
-## 📋 Prerequisites
-
-- [Node.js](https://nodejs.org/) 18+
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (recommended)
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/) (optional — Docker can substitute)
-
----
-
-## 🚀 Quick Start
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/takkub/tunnel.git
-cd tunnel
-
-# 2. Install dependencies
-npm install
-
-# 3. Check system requirements
-npm run check
-
-# 4. Login to Cloudflare
-npm run login
-
-# 5. Create your first tunnel
-npm run setup
-
-# 6. Or use the interactive menu
-npm run menu
-```
-
----
-
-## 📖 Commands
-
-| Command | Description |
+| Platform | Action |
 |---|---|
-| `npm run menu` | Interactive menu (recommended) |
-| `npm run check` | Check system requirements |
-| `npm run login` | Login to Cloudflare |
-| `npm run setup` | Create & configure a new tunnel |
-| `npm run status` | View tunnel & Docker status |
-| `npm start` | Start all tunnels (docker-compose up) |
-| `npm stop` | Stop all tunnels (docker-compose down) |
-| `npm run delete` | Delete a tunnel (interactive) |
-| `npm run delete:force` | Force delete a tunnel |
-| `npm run delete:quick` | Quick delete (no prompts) |
-| `npm run cleanup` | Full cleanup (tunnel + DNS + files) |
-| `npm run check:dns` | Inspect DNS records |
-| `npm run check:cnames` | List all tunnel CNAME records |
-| `npm run cleanup:cnames` | Delete ALL tunnel CNAME records |
-| `npm run fix:dns` | Fix DNS route for a tunnel |
+| **Windows** | Double-click `start.bat` |
+| **macOS** | Double-click `start.command` (right-click → Open first time) |
+| **Linux** | Run `./start.sh` in terminal |
 
----
+Opens the web UI at `http://localhost:3000` automatically.
 
-## ⚙️ Configuration
+### Start All Tunnels
 
-Copy the example environment file:
+| Platform | Action |
+|---|---|
+| **Windows** | Double-click `start-tunnels.bat` |
+| **macOS** | Double-click `start-tunnels.command` |
+| **Linux** | Run `./start-tunnels.sh` in terminal |
+
+### Docker (any platform)
 
 ```bash
-cp .env.example .env
+docker compose -f docker-compose-web.yml up
 ```
 
-Edit `.env` with your Cloudflare credentials:
+## Terminal Commands
 
-```env
-CLOUDFLARE_API_TOKEN=your-api-token-here
-ZONE_ID=your-zone-id-here
+**Web UI**
+```bash
+npm run web:dev   # start web UI (http://localhost:3000)
 ```
 
-> **Note:** The API token needs `Zone.DNS.Edit` permission. Create one at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens).
-
----
-
-## 📁 Project Structure
-
-```
-tunnel/
-├── scripts/
-│   ├── menu.js              # Interactive TUI menu
-│   ├── ui-helper.js         # Console styling utilities
-│   ├── cloudflare-api.js    # Cloudflare API wrapper
-│   ├── setup-tunnel.js      # Tunnel creation wizard
-│   ├── delete-tunnel.js     # Interactive tunnel deletion
-│   ├── force-delete-tunnel.js
-│   ├── quick-delete-tunnel.js
-│   ├── cleanup-tunnel.js    # Full cleanup (tunnel + DNS + files)
-│   ├── cleanup-all-cnames.js
-│   ├── check-requirements.js
-│   ├── check-dns.js
-│   ├── fix-app-dns.js
-│   ├── list-cnames.js
-│   ├── login.js
-│   └── status.js
-├── tunnels/                  # Auto-generated tunnel configs (gitignored)
-├── .env.example              # Environment template
-├── package.json
-└── README.md
+**Tunnel Operations**
+```bash
+npm start                  # start all tunnels
+npm run start:tunnel       # start one tunnel (interactive)
+npm stop                   # stop all tunnels
+npm run stop:tunnel        # stop one tunnel (interactive)
+npm run menu               # interactive menu (all options)
 ```
 
----
+**Management**
+```bash
+npm run check     # check requirements
+npm run login     # Cloudflare login
+npm run setup     # setup a new tunnel
+npm run status    # check tunnel status
+npm run delete    # delete a tunnel
+```
 
-## 🔒 Security
+## Runtime Mode
 
-- `.env` files with API tokens are **never** committed (gitignored)
-- Tunnel credentials (`*.json`, `cert.pem`) inside `tunnels/` are **gitignored**
-- Docker compose files generated per tunnel are **gitignored**
+The manager auto-detects whether to use Docker or native `cloudflared`:
 
----
+| Mode | Behaviour |
+|---|---|
+| `auto` (default) | Uses Docker if available, otherwise native `cloudflared` |
+| `docker` | Always use Docker compose |
+| `native` | Always use `cloudflared` binary directly |
 
-## 📄 License
+Switch mode in the web UI under **Settings → Runtime Mode**, or edit `runtime.config.json`:
 
-[MIT](LICENSE) © takkub
+```json
+{ "mode": "auto" }
+```
+
+Native mode stores PIDs at `tunnels/<name>/.pid` and logs at `tunnels/<name>/.log`.
+
+## Available Tunnels
+
+Tunnel configs live in `tunnels/<name>/config.yml`. Docker compose files are at `docker-compose-cloudflare-<name>.yml`.
+
+Notes
+- Sensitive files (certs, credentials, `.pid`) are ignored by `.gitignore`.
+- `cloudflared.exe` is bundled for Windows; macOS/Linux users install via `brew install cloudflared` or their package manager.

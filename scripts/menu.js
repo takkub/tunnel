@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 const { execSync } = require('child_process');
 const readline = require('readline');
 const ui = require('./ui-helper');

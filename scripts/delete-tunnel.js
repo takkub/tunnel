@@ -1,333 +1,165 @@
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const ui = require('./ui-helper');
+const https = require('https');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-function exec(command, silent = false) {
+const tunnelName = process.argv[2];
+if (!tunnelName) {
+  console.error('Usage: node delete-tunnel.js <tunnelName>');
+  process.exit(1);
+}
+
+if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(tunnelName)) {
+  console.error('Invalid tunnel name');
+  process.exit(1);
+}
+
+const projectRoot = path.join(__dirname, '..');
+
+function execFile(bin, args) {
   try {
-    const output = execSync(command, { stdio: silent ? 'pipe' : 'inherit', encoding: 'utf8' });
-    return { success: true, output };
-  } catch (error) {
-    return { success: false, error };
+    execFileSync(bin, args, { stdio: 'inherit' });
+    return true;
+  } catch {
+    return false;
   }
 }
 
-// ตรวจสอบว่ามี cloudflared ติดตั้งหรือไม่
-function getCloudflaredCommand() {
-  try {
-    execSync('cloudflared --version', { stdio: 'pipe' });
-    return 'cloudflared';
-  } catch (error) {
-    ui.fail('cloudflared is not installed!');
-    console.log('');
-    ui.section('Installation');
-    ui.command('winget install Cloudflare.cloudflared');
-    console.log('');
-    ui.tip('Then restart your terminal and try again.');
-    console.log('');
-    process.exit(1);
-  }
+function getCloudflaredBin() {
+  const localExe = path.join(projectRoot, 'cloudflared.exe');
+  try { execFileSync(localExe, ['--version'], { stdio: 'pipe' }); return localExe; } catch {}
+  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
+  return null;
 }
 
-function getTunnelInfo(tunnelName) {
+function getHostnamesFromConfig(name) {
   try {
-    const cmd = getCloudflaredCommand();
-    const result = execSync(`${cmd} tunnel info ${tunnelName}`, { encoding: 'utf8' });
-    return result;
-  } catch (error) {
-    return null;
-  }
+    const configPath = path.join(projectRoot, 'tunnels', name, 'config.yml');
+    if (!fs.existsSync(configPath)) return [];
+    const content = fs.readFileSync(configPath, 'utf8');
+    const hostnames = [];
+    const regex = /hostname:\s*(\S+)/g;
+    let m;
+    while ((m = regex.exec(content)) !== null) hostnames.push(m[1]);
+    return hostnames;
+  } catch (_) { return []; }
 }
 
-function getTunnelId(tunnelName) {
-  try {
-    const cmd = getCloudflaredCommand();
-    const result = execSync(`${cmd} tunnel list`, { encoding: 'utf8' });
-    const lines = result.split('\n');
-
-    for (const line of lines) {
-      const match = line.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\s+(\S+)/i);
-      if (match && match[2] === tunnelName) {
-        return match[1];
+function cfRequest(method, urlPath) {
+  return new Promise(resolve => {
+    const options = {
+      hostname: 'api.cloudflare.com',
+      path: urlPath,
+      method,
+      headers: {
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        'Content-Type': 'application/json'
       }
-    }
-
-    // ลองหาจากไฟล์ JSON ในโฟลเดอร์
-    const projectRoot = path.join(__dirname, '..');
-    const tunnelsDir = path.join(projectRoot, 'tunnels');
-    if (fs.existsSync(tunnelsDir)) {
-      const folders = fs.readdirSync(tunnelsDir);
-      for (const folder of folders) {
-        const jsonFiles = fs.readdirSync(path.join(tunnelsDir, folder))
-          .filter(f => f.endsWith('.json') && f.match(/[a-f0-9-]{36}\.json/));
-        if (jsonFiles.length > 0) {
-          return jsonFiles[0].replace('.json', '');
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
-
-function getDNSRecords(tunnelName) {
-  try {
-    const cmd = getCloudflaredCommand();
-    const result = execSync(`${cmd} tunnel route dns list`, { encoding: 'utf8' });
-    const lines = result.split('\n');
-    const records = [];
-
-    lines.forEach(line => {
-      if (line.includes(tunnelName)) {
-        const match = line.match(/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-        if (match) {
-          records.push(match[1]);
-        }
-      }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (_) { resolve(null); }
+      });
     });
-
-    return records;
-  } catch (error) {
-    return [];
-  }
+    req.on('error', () => resolve(null));
+    req.end();
+  });
 }
 
-// Get list of available tunnel names for selection
-function getTunnelList() {
-  try {
-    const cmd = getCloudflaredCommand();
-    const result = execSync(`${cmd} tunnel list`, { encoding: 'utf8' });
-    const lines = result.split('\n');
-    const tunnels = [];
-
-    for (const line of lines) {
-      const match = line.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\s+(\S+)/i);
-      if (match && match[2]) {
-        tunnels.push(match[2]);
+async function deleteDnsRecords(hostnames) {
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const zoneId = process.env.ZONE_ID;
+  if (!token || !zoneId) {
+    console.warn('[WARN] Missing CLOUDFLARE_API_TOKEN or ZONE_ID, skipping DNS deletion');
+    return;
+  }
+  for (const hostname of hostnames) {
+    try {
+      const res = await cfRequest('GET', `/client/v4/zones/${zoneId}/dns_records?name=${hostname}`);
+      if (!res || !res.success || !res.result?.length) {
+        console.warn(`[WARN] No DNS record found for: ${hostname}`);
+        continue;
       }
+      for (const record of res.result) {
+        const del = await cfRequest('DELETE', `/client/v4/zones/${zoneId}/dns_records/${record.id}`);
+        if (del?.success) console.log(`[OK] Deleted DNS record: ${hostname}`);
+        else console.warn(`[WARN] Failed to delete DNS record: ${hostname}`);
+      }
+    } catch (err) {
+      console.warn(`[WARN] DNS error for ${hostname}: ${err.message}`);
     }
-
-    return tunnels;
-  } catch (error) {
-    return [];
   }
 }
 
 async function main() {
-  ui.warningHeader('Delete Tunnel', 'Remove tunnel and all associated resources');
+  console.log(`Deleting tunnel: ${tunnelName}`);
 
-  // ตรวจสอบว่ามีการส่ง argument มาหรือไม่
-  let tunnelName = process.argv[2];
+  // Step 1: Stop docker
+  const composeFile = path.join(projectRoot, `docker-compose-cloudflare-${tunnelName}.yml`);
+  if (fs.existsSync(composeFile)) {
+    console.log('[1/5] Stopping Docker container...');
+    const ok = execFile('docker', ['compose', '-f', composeFile, 'down']);
+    if (!ok) console.warn('[WARN] docker compose down failed, continuing...');
+  } else {
+    console.log('[1/5] No docker-compose file found, skipping...');
+  }
 
-  if (!tunnelName) {
-    // Get list of available tunnels
-    const availableTunnels = getTunnelList();
+  // Step 2: Delete cloudflare tunnel
+  console.log('[2/5] Deleting Cloudflare tunnel...');
+  const bin = getCloudflaredBin();
+  if (bin) {
+    const ok = execFile(bin, ['tunnel', 'delete', '-f', tunnelName]);
+    if (!ok) console.warn('[WARN] tunnel delete failed, continuing...');
+  } else {
+    console.warn('[WARN] cloudflared not found, skipping tunnel delete');
+  }
 
-    if (availableTunnels.length === 0) {
-      ui.error('No tunnels found!');
-      console.log('');
-      ui.tip('Create a tunnel first with: npm run setup');
-      process.exit(1);
-    }
+  // Step 3: Delete DNS records
+  console.log('[3/5] Deleting DNS records...');
+  const hostnames = getHostnamesFromConfig(tunnelName);
+  if (hostnames.length > 0) {
+    await deleteDnsRecords(hostnames);
+  } else {
+    console.log('No hostnames found in config, skipping DNS deletion');
+  }
 
-    // Add cancel option
-    const options = [...availableTunnels, { label: '❌ Cancel', value: null }];
-
+  // Step 4: Delete tunnel folder
+  console.log('[4/5] Deleting tunnel folder...');
+  const tunnelsBase = path.resolve(projectRoot, 'tunnels');
+  const tunnelDir = path.resolve(tunnelsBase, tunnelName);
+  if (!tunnelDir.startsWith(tunnelsBase + path.sep)) {
+    console.warn('[WARN] Unsafe tunnel path, skipping folder deletion');
+  } else if (fs.existsSync(tunnelDir)) {
     try {
-      tunnelName = await ui.selectFromList(
-        `${ui.icons.list} Select tunnel to delete:`,
-        options
-      );
-
-      if (!tunnelName) {
-        ui.warning('Cancelled.');
-        return;
-      }
-    } catch (error) {
-      ui.warning('Cancelled.');
-      return;
+      fs.rmSync(tunnelDir, { recursive: true, force: true });
+      console.log(`[OK] Deleted: tunnels/${tunnelName}/`);
+    } catch (err) {
+      console.warn(`[WARN] Could not delete folder: ${err.message}`);
     }
   } else {
-    ui.info(`Deleting tunnel: ${ui.c.bold}${tunnelName}${ui.c.reset}`);
+    console.log('No tunnel folder found, skipping...');
   }
 
-  // ดึง tunnel ID
-  ui.step(1, 6, `${ui.icons.dns} Finding Tunnel ID...`);
-  const tunnelId = getTunnelId(tunnelName);
-  if (tunnelId) {
-    ui.subStep(`Found tunnel ID: ${ui.c.cyan}${tunnelId}${ui.c.reset}`, 'success');
-  } else {
-    ui.subStep(`Could not find tunnel ID for: ${tunnelName}`, 'error');
-    ui.tip('Will try to delete using tunnel name...');
-  }
-
-  // ดึงข้อมูล DNS records
-  const dnsRecords = getDNSRecords(tunnelName);
-
-  // Warning box
-  console.log('');
-  ui.box(`${ui.icons.warning} WARNING: You are about to delete`, [
-    `Tunnel: ${tunnelName}`,
-    `ID: ${tunnelId || 'unknown'}`,
-    `DNS Records: ${dnsRecords.length > 0 ? dnsRecords.join(', ') : 'none'}`,
-  ]);
-
-  console.log('');
-  const confirmDelete = await ui.confirmAction(
-    `⚠️  Are you sure you want to delete tunnel "${tunnelName}"?`,
-    false // Default to No for safety
-  );
-
-  if (!confirmDelete) {
-    ui.warning('Cancelled.');
-    return;
-  }
-
-  // ถามว่าจะลบอะไรบ้าง
-  console.log('');
-  const deletionOptions = await ui.multiSelect(
-    '🗑️  Select what to delete:',
-    [
-      { label: '🌐 DNS routes', value: 'dns', checked: true },
-      { label: '☁️  Tunnel from Cloudflare', value: 'tunnel', checked: true },
-      { label: '📁 Configuration folder', value: 'config', checked: true },
-      { label: '🐳 Docker compose file', value: 'docker', checked: true }
-    ]
-  );
-
-  const deleteDNS = deletionOptions.includes('dns');
-  const deleteTunnel = deletionOptions.includes('tunnel');
-  const deleteConfigFolder = deletionOptions.includes('config');
-  const deleteDockerCompose = deletionOptions.includes('docker');
-
-
-  const projectRoot = path.join(__dirname, '..');
-
-  // [1/6] หา folder ที่เกี่ยวข้อง
-  ui.step(2, 6, `${ui.icons.folder} Finding related configuration...`);
-  const tunnelsDir = path.join(projectRoot, 'tunnels');
-  let configFolder = null;
-
-  if (fs.existsSync(tunnelsDir)) {
-    const folders = fs.readdirSync(tunnelsDir);
-    for (const folder of folders) {
-      const configPath = path.join(tunnelsDir, folder, 'config.yml');
-      if (fs.existsSync(configPath)) {
-        const configContent = fs.readFileSync(configPath, 'utf8');
-        if (configContent.includes(tunnelName) || dnsRecords.some(record => configContent.includes(record))) {
-          configFolder = folder;
-          ui.subStep(`Found configuration in: tunnels/${folder}`, 'success');
-          break;
-        }
-      }
-    }
-  }
-
-  // [2/6] หยุด Docker containers
-  ui.step(3, 6, `${ui.icons.docker} Stopping Docker containers...`);
-  const composeFiles = fs.existsSync(projectRoot) ? fs.readdirSync(projectRoot)
-    .filter(f => f.startsWith('docker-compose-cloudflare-') && f.endsWith('.yml')) : [];
-
-  let dockerComposeFile = null;
-  composeFiles.forEach(file => {
-    const filePath = path.join(projectRoot, file);
-    if (configFolder && file.includes(configFolder)) {
-      dockerComposeFile = file;
-      ui.subStep(`Stopping container from: ${file}`, 'pending');
-      exec(`docker-compose -f "${filePath}" down`, true);
-      ui.subStep(`Stopped: ${file}`, 'success');
-    }
-  });
-
-  // [3/6] ลบ DNS routes
-  ui.step(4, 6, `${ui.icons.globe} Removing DNS routes...`);
-  const cmd = getCloudflaredCommand();
-  if (deleteDNS && dnsRecords.length > 0) {
-    for (const record of dnsRecords) {
-      const identifier = tunnelId || tunnelName;
-      const result = exec(`${cmd} tunnel route dns delete ${identifier} ${record}`, true);
-      if (result.success) {
-        ui.subStep(`Deleted: ${record}`, 'success');
-      } else {
-        ui.subStep(`Could not delete: ${record}`, 'error');
-      }
-    }
-  } else if (!deleteDNS) {
-    ui.subStep('Skipped (user choice)', 'skip');
-  } else {
-    ui.subStep('No DNS records found', 'skip');
-  }
-
-  // [4/6] ลบ tunnel จาก Cloudflare
-  ui.step(5, 6, `${ui.icons.cloud} Deleting tunnel from Cloudflare...`);
-  if (deleteTunnel) {
-    const identifier = tunnelId || tunnelName;
-
-    let deleteResult = exec(`${cmd} tunnel delete -f ${identifier}`, true);
-
-    if (!deleteResult.success) {
-      deleteResult = exec(`${cmd} tunnel delete ${identifier}`, true);
-    }
-
-    if (!deleteResult.success && tunnelId && tunnelId !== tunnelName) {
-      deleteResult = exec(`${cmd} tunnel delete -f ${tunnelName}`, true);
-    }
-
-    if (deleteResult.success) {
-      ui.subStep('Tunnel deleted from Cloudflare', 'success');
-    } else {
-      ui.subStep('Could not delete tunnel', 'error');
-      console.log(`   ${ui.c.dim}You may need to delete it manually from the Dashboard${ui.c.reset}`);
-    }
-  } else {
-    ui.subStep('Skipped (user choice)', 'skip');
-  }
-
-  // [5/6] ลบ configuration folder
-  ui.step(6, 6, `${ui.icons.trash} Removing local files...`);
-  if (deleteConfigFolder && configFolder) {
-    const configPath = path.join(tunnelsDir, configFolder);
+  // Step 5: Delete docker-compose file
+  console.log('[5/5] Deleting docker-compose file...');
+  if (fs.existsSync(composeFile)) {
     try {
-      fs.rmSync(configPath, { recursive: true, force: true });
-      ui.subStep(`Deleted: tunnels/${configFolder}/`, 'success');
-    } catch (error) {
-      ui.subStep(`Could not delete folder: ${error.message}`, 'error');
+      fs.unlinkSync(composeFile);
+      console.log(`[OK] Deleted: docker-compose-cloudflare-${tunnelName}.yml`);
+    } catch (err) {
+      console.warn(`[WARN] Could not delete file: ${err.message}`);
     }
-  } else if (!deleteConfigFolder) {
-    ui.subStep('Config folder skipped (user choice)', 'skip');
   } else {
-    ui.subStep('No configuration folder found', 'skip');
+    console.log('No docker-compose file found, skipping...');
   }
 
-  // ลบ docker-compose file
-  if (deleteDockerCompose && dockerComposeFile) {
-    const composePath = path.join(projectRoot, dockerComposeFile);
-    try {
-      fs.unlinkSync(composePath);
-      ui.subStep(`Deleted: ${dockerComposeFile}`, 'success');
-    } catch (error) {
-      ui.subStep(`Could not delete file: ${error.message}`, 'error');
-    }
-  } else if (!deleteDockerCompose) {
-    ui.subStep('Docker compose skipped (user choice)', 'skip');
-  } else {
-    ui.subStep('No docker-compose file found', 'skip');
-  }
-
-  // Summary
-  ui.complete('Cleanup Complete!');
-
-  ui.summaryBox('Summary', [
-    ['Tunnel', tunnelName],
-    ['DNS Records', deleteDNS && dnsRecords.length > 0 ? `${dnsRecords.length} removed` : 'skipped'],
-    ['Cloudflare', deleteTunnel ? 'deleted' : 'kept'],
-    ['Local Files', deleteConfigFolder || deleteDockerCompose ? 'cleaned' : 'kept']
-  ]);
+  console.log('Done.');
 }
 
-main().catch(error => {
-  ui.error(`Error: ${error.message}`);
+main().catch(err => {
+  console.error(`Error: ${err.message}`);
   process.exit(1);
 });

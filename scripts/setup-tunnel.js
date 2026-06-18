@@ -4,10 +4,13 @@ const path = require('path');
 const ui = require('./ui-helper');
 const readline = require('readline');
 
-// Force stdin to resume and ensure it's in proper state
-if (process.stdin.isTTY) {
-  process.stdin.setRawMode(false);
+if (process.env.CI === '1' || !process.stdin.isTTY) {
+  console.error('interactive mode required, run from terminal');
+  process.exit(1);
 }
+
+// Force stdin to resume and ensure it's in proper state
+process.stdin.setRawMode(false);
 process.stdin.resume();
 process.stdin.setEncoding('utf8');
 
@@ -310,7 +313,7 @@ services:
       const composeFilePath = path.join(projectRoot, dockerComposeFile);
 
       try {
-        execSync(`docker-compose -f "${composeFilePath}" up -d`, {
+        execSync(`docker compose -f "${composeFilePath}" up -d`, {
           stdio: 'inherit' // Show output directly, only throw on non-zero exit
         });
 
