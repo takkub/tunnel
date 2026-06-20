@@ -17,6 +17,8 @@ services:
       - ./scripts:/app/scripts
       - ./tunnels:/app/tunnels
       - ./domains.config.json:/app/domains.config.json
+      - ./nginx-sites.config.json:/app/nginx-sites.config.json
+      - ./nginx:/app/nginx
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CLOUDFLARED_HOME:-C:/Users/monch/.cloudflared}:/root/.cloudflared
     working_dir: /app/web
