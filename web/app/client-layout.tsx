@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 function IconTunnel({ className }: { className?: string }) {
@@ -56,6 +56,16 @@ function IconDocker({ className }: { className?: string }) {
   )
 }
 
+function IconLogout({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
 const navItems = [
   { href: '/', label: 'Tunnels', Icon: IconTunnel },
   { href: '/nginx', label: 'Nginx', Icon: IconServer },
@@ -73,11 +83,17 @@ const pageTitles: Record<string, string> = {
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const title = pageTitles[pathname] ?? 'Tunnel Manager'
   const toggleBtnRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const wasOpenRef = useRef(false)
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   useEffect(() => {
     if (!sidebarOpen) return
@@ -99,6 +115,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       toggleBtnRef.current?.focus()
     }
   }, [sidebarOpen])
+
+  if (pathname === '/login') return <>{children}</>
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">
@@ -153,6 +171,17 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             )
           })}
         </nav>
+
+        {/* Logout */}
+        <div className="p-2 border-t border-zinc-800/60 shrink-0">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-150"
+          >
+            <IconLogout className="w-4 h-4 flex-shrink-0" />
+            Logout
+          </button>
+        </div>
       </aside>
 
       {/* Main */}
