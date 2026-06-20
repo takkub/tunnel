@@ -4,6 +4,8 @@
   "description": "Cloudflare Tunnel Management Scripts",
   "main": "dist/index.js",
   "scripts": {
+    "web": "cd web && node node_modules/next/dist/bin/next build && node node_modules/next/dist/bin/next start -p 8888",
+    "web:dev": "cd web && node node_modules/next/dist/bin/next dev",
     "menu": "node scripts/menu.js",
     "start": "docker-compose up -d",
     "stop": "docker-compose down",

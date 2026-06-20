@@ -31,7 +31,8 @@ function checkCloudflared() {
 
 // ตรวจสอบว่า login แล้วหรือยัง
 function isLoggedIn() {
-  const certPath = path.join(process.env.USERPROFILE, '.cloudflared', 'cert.pem');
+  const home = process.env.USERPROFILE || process.env.HOME || '';
+  const certPath = path.join(home, '.cloudflared', 'cert.pem');
   return fs.existsSync(certPath);
 }
 
@@ -93,7 +94,7 @@ if (cloudflared.found) {
   ui.warning('Your browser will open for authentication.');
   console.log('');
 
-  const userProfile = process.env.USERPROFILE;
+  const userProfile = process.env.USERPROFILE || process.env.HOME || '';
   const cloudflaredDir = path.join(userProfile, '.cloudflared');
 
   // สร้างโฟลเดอร์ .cloudflared ถ้ายังไม่มี

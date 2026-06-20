@@ -1,16 +1,49 @@
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const ui = require('./ui-helper');
+
+function getCloudflaredBin() {
+  const localExe = path.join(__dirname, '..', 'cloudflared.exe');
+  if (fs.existsSync(localExe)) return localExe;
+  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
+  return 'cloudflared';
+}
 
 ui.header('DNS Configuration', 'Check tunnel DNS settings');
 
-const tunnelName = process.argv[2] || 'app';
+const tunnelName = process.argv[2];
+
+// When no arg: scan tunnels/ dir and print CNAME for each
+if (!tunnelName) {
+  const tunnelsDir = path.join(__dirname, '..', 'tunnels');
+  const entries = fs.existsSync(tunnelsDir)
+    ? fs.readdirSync(tunnelsDir).filter(d => fs.existsSync(path.join(tunnelsDir, d, 'config.yml')))
+    : [];
+  if (entries.length === 0) {
+    console.log('No tunnels found');
+    process.exit(0);
+  }
+  ui.section(`${ui.icons.list} Tunnels (${entries.length})`);
+  console.log('');
+  for (const dir of entries) {
+    const cfg = fs.readFileSync(path.join(tunnelsDir, dir, 'config.yml'), 'utf8');
+    const idMatch = cfg.match(/^tunnel:\s*([a-f0-9-]{36})/m);
+    const hostMatch = cfg.match(/hostname:\s*(\S+)/);
+    const id = idMatch ? idMatch[1] : '?';
+    const host = hostMatch ? hostMatch[1] : '?';
+    console.log(`  ${ui.c.cyan}${dir}${ui.c.reset}: ${host} -> ${ui.c.green}${id}.cfargotunnel.com${ui.c.reset}`);
+  }
+  console.log('');
+  process.exit(0);
+}
 
 try {
   // ดู tunnel info
-  ui.section(`${ui.icons.dns} Checking tunnel: ${ui.c.cyan}${tunnelName}-tunnel${ui.c.reset}`);
+  ui.section(`${ui.icons.dns} Checking tunnel: ${ui.c.cyan}${tunnelName}${ui.c.reset}`);
   console.log('');
 
-  const list = execSync('cloudflared tunnel list', { encoding: 'utf8' });
+  const list = execFileSync(getCloudflaredBin(), ['tunnel', 'list'], { encoding: 'utf8' });
   const lines = list.split('\n');
 
   ui.section(`${ui.icons.list} Available Tunnels`);
@@ -45,7 +78,7 @@ try {
   if (tunnelId) {
     console.log('');
     ui.summaryBox('Tunnel Found', [
-      ['Name', `${tunnelName}-tunnel`],
+      ['Name', tunnelName],
       ['ID', tunnelId],
       ['CNAME', `${tunnelId}.cfargotunnel.com`]
     ]);
@@ -61,7 +94,7 @@ try {
     console.log(`     ${ui.c.green}${tunnelId}.cfargotunnel.com${ui.c.reset}`);
     console.log('');
   } else {
-    ui.fail(`Tunnel not found: ${tunnelName}-tunnel`);
+    ui.fail(`Tunnel not found: ${tunnelName}`);
     console.log('');
     ui.section('Available Tunnels');
     console.log('');

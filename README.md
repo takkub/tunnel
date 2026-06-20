@@ -1,5 +1,26 @@
 # Tunnel Management Scripts
 
+## Run Web Admin UI
+
+| Platform | One-click |
+|---|---|
+| **Windows** | Double-click `start-web.bat` |
+| **macOS** | Double-click `start-web.command` (right-click → Open on first run) |
+| **Linux** | `chmod +x start-web.sh && ./start-web.sh` |
+
+Or via npm from the repo root:
+
+```bash
+npm run web      # build (if needed) + start production server on :8888
+npm run web:dev  # start dev server with hot-reload (for development only)
+```
+
+Open **http://localhost:8888** after starting.
+
+The server runs in the background — to stop it close the "Tunnel Web Admin" window (Windows) or `kill $(cat web-admin.pid)` (macOS/Linux).
+
+---
+
 Automation to manage Cloudflare tunnels across Windows, macOS, and Linux — via Docker or native `cloudflared`.
 
 ## Installation / ติดตั้ง

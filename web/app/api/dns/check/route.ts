@@ -3,9 +3,12 @@ import { runScript } from '@/lib/scripts'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const tunnel = searchParams.get('tunnel')
   try {
-    const output = await runScript('check-dns.js')
+    const args = tunnel ? [tunnel] : []
+    const output = await runScript('check-dns.js', args)
     return NextResponse.json({ message: 'ตรวจสอบ DNS แล้ว', output })
   } catch (e) {
     console.error(e)

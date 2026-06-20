@@ -3,12 +3,9 @@ const { listDnsRecords, deleteDnsRecord } = require('./cloudflare-api');
 const ui = require('./ui-helper');
 const readline = require('readline');
 
-if (process.env.CI === '1' || !process.stdin.isTTY) {
-    console.error('interactive mode required, run from terminal');
-    process.exit(1);
-}
+const CI_MODE = process.env.CI === '1' || !process.stdin.isTTY;
 
-const rl = readline.createInterface({
+const rl = CI_MODE ? null : readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
@@ -47,7 +44,7 @@ async function main() {
 
         if (cnames.length === 0) {
             ui.success('No Tunnel CNAME records found to delete');
-            rl.close();
+            if (rl) rl.close();
             return;
         }
 
@@ -69,12 +66,15 @@ async function main() {
         ]);
         console.log('');
 
-        const confirm = await question(`Type "${ui.c.red}DELETE ALL${ui.c.reset}" to confirm: `);
-
-        if (confirm !== 'DELETE ALL') {
-            ui.warning('Cancelled');
-            rl.close();
-            return;
+        if (!CI_MODE) {
+            const confirm = await question(`Type "${ui.c.red}DELETE ALL${ui.c.reset}" to confirm: `);
+            if (confirm !== 'DELETE ALL') {
+                ui.warning('Cancelled');
+                if (rl) rl.close();
+                return;
+            }
+        } else {
+            ui.warning('CI mode: skipping confirmation, deleting all');
         }
 
         ui.step(2, 2, `${ui.icons.trash} Deleting records...`);
@@ -112,7 +112,7 @@ async function main() {
         ui.fail(`Error: ${error.message}`);
     }
 
-    rl.close();
+    if (rl) rl.close();
 }
 
 main();

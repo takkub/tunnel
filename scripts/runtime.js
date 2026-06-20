@@ -56,14 +56,14 @@ function dockerStart(name) {
   const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
   if (!fs.existsSync(composeFile)) throw new Error(`No compose file for ${name}`);
   try {
-    execSync(`docker compose -f "${composeFile}" up -d --remove-orphans`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+    execSync(`docker compose -p tunnel -f "${composeFile}" up -d`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
   } catch (err) {
     // Name conflict: stale container with same name from outside this compose project
     const containerName = `cloudflared-tunnel-${name}`;
     try {
       execSync(`docker rm -f "${containerName}"`, { encoding: 'utf8', stdio: 'pipe' });
     } catch {}
-    execSync(`docker compose -f "${composeFile}" up -d --remove-orphans`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+    execSync(`docker compose -p tunnel -f "${composeFile}" up -d`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
   }
 }
 
@@ -72,7 +72,7 @@ function dockerStop(name) {
   const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
   if (fs.existsSync(composeFile)) {
     try {
-      execSync(`docker compose -f "${composeFile}" down`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
+      execSync(`docker compose -p tunnel -f "${composeFile}" down`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
     } catch {}
   }
   // Fallback: force-remove container if still running (e.g. started from old/different compose project)
@@ -188,7 +188,7 @@ function nativeStart(name) {
 
 function nativeStop(name) {
   const pidFile = path.join(TUNNELS_DIR, name, '.pid');
-  if (!fs.existsSync(pidFile)) throw new Error(`No .pid file for tunnel: ${name}`);
+  if (!fs.existsSync(pidFile)) return; // already stopped
   const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
   try { process.kill(pid); } catch {}
   fs.unlinkSync(pidFile);

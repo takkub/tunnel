@@ -24,8 +24,10 @@ function getCloudflaredBin() {
 }
 
 try {
-  execFileSync(getCloudflaredBin(), ['tunnel', 'route', 'dns', tunnelName, hostname], { stdio: 'inherit' });
+  const out = execFileSync(getCloudflaredBin(), ['tunnel', 'route', 'dns', tunnelName, hostname], { encoding: 'utf8', stdio: 'pipe' });
+  process.stdout.write(out || 'DNS route updated\n');
   process.exit(0);
 } catch (err) {
+  process.stderr.write((err.stdout || '') + (err.stderr || err.message || 'unknown error') + '\n');
   process.exit(1);
 }

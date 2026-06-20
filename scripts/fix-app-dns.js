@@ -1,6 +1,16 @@
 try { require('dotenv').config(); } catch {}
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const ui = require('./ui-helper');
+
+function getCloudflaredBin() {
+  const localExe = path.join(__dirname, '..', 'cloudflared.exe');
+  if (fs.existsSync(localExe)) return localExe;
+  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
+  return 'cloudflared';
+}
+const BIN = getCloudflaredBin();
 
 ui.header('DNS Fix', 'Fix DNS for your domain');
 
@@ -23,7 +33,7 @@ console.log('');
 ui.step(1, 2, `${ui.icons.trash} Removing old DNS route...`);
 try {
   if (!oldTunnelId) throw new Error('no oldTunnelId');
-  execSync(`cloudflared tunnel route dns delete ${oldTunnelId} ${domain}`, { stdio: 'pipe' });
+  execFileSync(BIN, ['tunnel', 'route', 'dns', 'delete', oldTunnelId, domain], { stdio: 'pipe' });
   ui.subStep('Removed old DNS route', 'success');
 } catch (e) {
   ui.subStep('No old DNS route found (or already removed)', 'skip');
@@ -44,7 +54,7 @@ console.log('');
 // สร้าง DNS route ใหม่
 ui.step(2, 2, `${ui.icons.dns} Creating new DNS route...`);
 try {
-  execSync(`cloudflared tunnel route dns ${tunnelId} ${domain}`, { stdio: 'inherit' });
+  execFileSync(BIN, ['tunnel', 'route', 'dns', tunnelId, domain], { stdio: 'pipe' });
   console.log('');
   ui.complete('DNS route created successfully!');
 
