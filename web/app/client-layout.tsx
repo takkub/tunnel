@@ -44,15 +44,29 @@ function IconServer({ className }: { className?: string }) {
   )
 }
 
+function IconDocker({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="5" height="4" rx="1" />
+      <rect x="8" y="7" width="5" height="4" rx="1" />
+      <rect x="14" y="7" width="5" height="4" rx="1" />
+      <rect x="8" y="2" width="5" height="4" rx="1" />
+      <path d="M2 15c0 2.2 1.8 4 4 4h12a4 4 0 004-4v-2H2v2z" />
+    </svg>
+  )
+}
+
 const navItems = [
   { href: '/', label: 'Tunnels', Icon: IconTunnel },
   { href: '/nginx', label: 'Nginx', Icon: IconServer },
+  { href: '/docker', label: 'Docker', Icon: IconDocker },
   { href: '/settings', label: 'Settings', Icon: IconSettings },
 ]
 
 const pageTitles: Record<string, string> = {
   '/': 'Tunnels',
   '/nginx': 'Nginx Reverse Proxy',
+  '/docker': 'Docker',
   '/settings': 'Settings',
   '/setup': 'Setup',
 }
