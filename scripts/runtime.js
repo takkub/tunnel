@@ -25,6 +25,54 @@ function getCloudflaredBin() {
   return 'cloudflared';
 }
 
+// True when this process runs inside a Docker container
+function isInContainer() {
+  return fs.existsSync('/.dockerenv');
+}
+
+// Resolve where the tunnels/ directory lives on the Docker HOST.
+// Needed when dockerStart runs inside the web container: compose volumes with relative paths
+// are resolved against the HOST filesystem, not the container filesystem.
+let _hostTunnelsDir = null;
+function getHostTunnelsDir() {
+  if (_hostTunnelsDir) return _hostTunnelsDir;
+
+  // 1. Explicit override (set via docker-compose-web.yml environment)
+  if (process.env.HOST_PROJECT_DIR) {
+    _hostTunnelsDir = process.env.HOST_PROJECT_DIR.replace(/\\/g, '/').replace(/\/$/, '') + '/tunnels';
+    return _hostTunnelsDir;
+  }
+
+  // 2. Auto-detect: inspect our own container via container ID from cgroup
+  try {
+    const cg = fs.readFileSync('/proc/self/cgroup', 'utf8');
+    const m = cg.match(/[a-f0-9]{64}/);
+    if (m) {
+      const shortId = m[0].slice(0, 12);
+      const raw = execSync(
+        `docker inspect "${shortId}" --format "{{index .Config.Labels \\"com.docker.compose.project.working_dir\\"}}"`,
+        { encoding: 'utf8', stdio: 'pipe' }
+      ).trim();
+      if (raw) {
+        _hostTunnelsDir = raw.replace(/\\/g, '/').replace(/\/$/, '') + '/tunnels';
+        return _hostTunnelsDir;
+      }
+      // Also try .Mounts fallback
+      const mraw = execSync(`docker inspect "${shortId}" --format "{{json .Mounts}}"`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+      const mounts = JSON.parse(mraw);
+      const mount = mounts.find(mt => mt.Destination === '/app/tunnels' && mt.Type === 'bind');
+      if (mount && mount.Source) {
+        _hostTunnelsDir = mount.Source.replace(/\\/g, '/').replace(/\/$/, '');
+        return _hostTunnelsDir;
+      }
+    }
+  } catch {}
+
+  throw new Error(
+    'Cannot resolve host project dir. Set HOST_PROJECT_DIR env var in docker-compose-web.yml.'
+  );
+}
+
 function isDockerAvailable() {
   try {
     execSync('docker ps', { stdio: 'pipe', timeout: 5000 });
@@ -55,11 +103,35 @@ function getEffectiveMode() {
 function dockerStart(name) {
   const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
   if (!fs.existsSync(composeFile)) throw new Error(`No compose file for ${name}`);
+
+  const containerName = `cloudflared-tunnel-${name}`;
+
+  if (isInContainer()) {
+    // When running inside the web container, docker compose resolves relative volume "."
+    // to the container path (/app/tunnels/<name>), which the HOST daemon can't see.
+    // Use docker run with the explicit HOST path instead.
+    const hostTunnelDir = getHostTunnelsDir() + '/' + name;
+    try { execSync(`docker rm -f "${containerName}"`, { encoding: 'utf8', stdio: 'pipe' }); } catch {}
+    execSync(
+      `docker run -d` +
+      ` --name "${containerName}"` +
+      ` --restart unless-stopped` +
+      ` --label com.docker.compose.project=tunnel` +
+      ` --label "com.docker.compose.service=cloudflared-${name}"` +
+      ` --label com.docker.compose.container-number=1` +
+      ` -v "${hostTunnelDir}:/etc/cloudflared"` +
+      ` --add-host host.docker.internal:host-gateway` +
+      ` cloudflare/cloudflared:latest` +
+      ` tunnel --config /etc/cloudflared/config.yml run`,
+      { encoding: 'utf8', stdio: 'pipe' }
+    );
+    return;
+  }
+
   try {
     execSync(`docker compose -p tunnel -f "${composeFile}" up -d`, { encoding: 'utf8', cwd: ROOT, stdio: 'pipe' });
   } catch (err) {
     // Name conflict: stale container with same name from outside this compose project
-    const containerName = `cloudflared-tunnel-${name}`;
     try {
       execSync(`docker rm -f "${containerName}"`, { encoding: 'utf8', stdio: 'pipe' });
     } catch {}

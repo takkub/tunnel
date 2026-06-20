@@ -4,7 +4,7 @@ const path = require('path');
 const https = require('https');
 const ui = require('./ui-helper');
 const { getTunnelNames } = require('./runtime');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+try { require('dotenv').config({ path: path.join(__dirname, '..', '.env') }); } catch {}
 
 const projectRoot = path.join(__dirname, '..');
 
@@ -142,13 +142,12 @@ async function main() {
 
   // Step 1: Stop docker
   const composeFile = path.join(projectRoot, 'tunnels', tunnelName, 'docker-compose.yml');
+  console.log('[1/5] Stopping Docker container...');
   if (fs.existsSync(composeFile)) {
-    console.log('[1/5] Stopping Docker container...');
-    const ok = execFile('docker', ['compose', '-f', composeFile, 'down']);
-    if (!ok) console.warn('[WARN] docker compose down failed, continuing...');
-  } else {
-    console.log('[1/5] No docker-compose file found, skipping...');
+    execFile('docker', ['compose', '-p', 'tunnel', '-f', composeFile, 'down']);
   }
+  // Always try direct remove by known container name (handles containers started via docker run)
+  execFile('docker', ['rm', '-f', `cloudflared-tunnel-${tunnelName}`]);
 
   // Step 2: Delete cloudflare tunnel
   console.log('[2/5] Deleting Cloudflare tunnel...');

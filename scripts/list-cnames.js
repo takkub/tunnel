@@ -1,4 +1,4 @@
-require('dotenv').config();
+try { require('dotenv').config(); } catch {}
 const { listDnsRecords } = require('./cloudflare-api');
 const ui = require('./ui-helper');
 

@@ -1,4 +1,4 @@
-require('dotenv').config(); // Load env first thing!
+try { require('dotenv').config(); } catch {} // Load env first thing!
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
