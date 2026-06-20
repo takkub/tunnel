@@ -74,7 +74,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
                 <button
                   onClick={copyHostname}
                   aria-label="คัดลอก hostname"
-                  className="flex-shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
+                  className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800 transition-colors"
                 >
                   {copied ? (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-emerald-400">
@@ -108,7 +108,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
             <button
               onClick={() => action('stop')}
               disabled={busy}
-              className="flex-1 min-h-[44px] rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-1.5"
+              className="flex-1 min-h-[44px] rounded-lg bg-zinc-800 hover:bg-zinc-700 hover:text-red-400 border border-zinc-700 hover:border-red-800 text-zinc-200 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-1.5"
             >
               {busyAction === 'stop' && <span className="w-3 h-3 border-2 border-zinc-400/30 border-t-zinc-300 rounded-full animate-spin" />}
               หยุด

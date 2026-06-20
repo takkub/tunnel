@@ -2,16 +2,18 @@ interface ButtonProps {
   onClick: () => void
   disabled?: boolean
   loading?: boolean
-  variant?: 'primary' | 'secondary' | 'danger' | 'success'
+  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'success-outline' | 'danger-outline'
   children: React.ReactNode
   className?: string
 }
 
 const variants = {
-  primary:   'bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white shadow-sm',
-  secondary: 'bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-700 text-zinc-200 border border-zinc-700',
-  danger:    'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white',
-  success:   'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white',
+  primary:          'bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white shadow-sm',
+  secondary:        'bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-700 text-zinc-200 border border-zinc-700',
+  danger:           'bg-red-600 hover:bg-red-500 active:bg-red-700 text-white',
+  success:          'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white',
+  'success-outline':'bg-transparent border border-emerald-700 text-emerald-400 hover:bg-emerald-500/10',
+  'danger-outline': 'bg-transparent border border-red-700 text-red-400 hover:bg-red-500/10',
 }
 
 export default function Button({ onClick, disabled, loading, variant = 'primary', children, className = '' }: ButtonProps) {

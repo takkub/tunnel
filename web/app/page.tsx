@@ -111,7 +111,28 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Toolbar */}
+      {/* Page header — R8 (badge inline) + R13 (subtitle) */}
+      <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-zinc-200 mb-1">Tunnels</h2>
+          <p className="text-sm text-zinc-500">จัดการ Cloudflare tunnels ทั้งหมด</p>
+        </div>
+        {effectiveMode && (
+          <span
+            title={`Runtime: ${effectiveMode}`}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono flex-shrink-0"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+              <rect x="2" y="7" width="5" height="4" rx="1" /><rect x="8" y="7" width="5" height="4" rx="1" />
+              <rect x="14" y="7" width="5" height="4" rx="1" /><rect x="8" y="2" width="5" height="4" rx="1" />
+              <path d="M2 15c0 2.2 1.8 4 4 4h12a4 4 0 004-4v-2H2v2z" />
+            </svg>
+            Runtime: {effectiveMode}
+          </span>
+        )}
+      </div>
+
+      {/* Toolbar — R7 (outline bulk, icon, divider) */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => setShowCreate(true)}
@@ -120,29 +141,35 @@ export default function DashboardPage() {
           <span className="text-lg leading-none font-light">+</span>
           New Tunnel
         </button>
+        <div className="w-px h-6 bg-zinc-700 mx-1 flex-shrink-0" />
         <Button
           onClick={handleStartAll}
           disabled={isBusy || tunnels.length === 0}
           loading={busy === 'start'}
-          variant="success"
+          variant="success-outline"
           className="text-sm"
         >
+          {!busy && (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          )}
           เริ่มทั้งหมด
         </Button>
         <Button
           onClick={handleStopAll}
           disabled={isBusy || runningCount === 0}
           loading={busy === 'stop'}
-          variant="danger"
+          variant="danger-outline"
           className="text-sm"
         >
+          {!busy && (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            </svg>
+          )}
           หยุดทั้งหมด
         </Button>
-        {effectiveMode && (
-          <span className="ml-auto text-[10px] px-2 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">
-            {effectiveMode}
-          </span>
-        )}
       </div>
 
       {/* Stat cards */}
@@ -223,10 +250,15 @@ export default function DashboardPage() {
               <p className="text-zinc-300 font-medium">ยังไม่มี Tunnel</p>
               <p className="text-zinc-400 text-sm mt-1">กด &quot;+ New Tunnel&quot; เพื่อสร้าง tunnel แรก</p>
             </>
+          ) : search ? (
+            <>
+              <p className="text-zinc-300 font-medium">ไม่พบ tunnel ที่ตรงกับคำค้นหา</p>
+              <p className="text-zinc-400 text-sm mt-1">&ldquo;{search}&rdquo; — ลองคำค้นหาอื่น</p>
+            </>
           ) : (
             <>
-              <p className="text-zinc-300 font-medium">ไม่พบผลลัพธ์</p>
-              <p className="text-zinc-400 text-sm mt-1">ลองเปลี่ยน filter หรือคำค้นหา</p>
+              <p className="text-zinc-300 font-medium">ไม่มี tunnel ในหมวดนี้</p>
+              <p className="text-zinc-400 text-sm mt-1">ลองเปลี่ยน filter</p>
             </>
           )}
         </div>

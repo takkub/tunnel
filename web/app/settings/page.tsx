@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Button from '@/components/Button'
 import Toast from '@/components/Toast'
+import RefreshButton from '@/components/RefreshButton'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
 
@@ -169,6 +170,12 @@ export default function SettingsPage() {
     <div className="max-w-xl space-y-4">
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
+      {/* Header */}
+      <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
+        <h2 className="font-semibold text-zinc-200 mb-1">Settings</h2>
+        <p className="text-sm text-zinc-500">จัดการ runtime mode, domains และตรวจสอบ requirements</p>
+      </div>
+
       {/* Runtime Mode */}
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
@@ -242,9 +249,7 @@ export default function SettingsPage() {
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">Domains</h2>
-          <button onClick={fetchDomains} disabled={domainsLoading} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40">
-            {domainsLoading ? 'โหลด...' : 'รีเฟรช'}
-          </button>
+          <RefreshButton onClick={fetchDomains} disabled={domainsLoading} loading={domainsLoading} />
         </div>
 
         {domainsLoading ? (
@@ -294,7 +299,7 @@ export default function SettingsPage() {
           <button
             type="submit"
             disabled={addingDomain || !domainInput || !zoneIdInput}
-            className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:opacity-40 transition-all duration-150 flex items-center justify-center gap-2"
+            className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
           >
             {addingDomain && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             เพิ่ม Domain
@@ -306,9 +311,7 @@ export default function SettingsPage() {
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">Requirements</h2>
-          <button onClick={fetchReqs} disabled={reqsLoading} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40">
-            {reqsLoading ? 'โหลด...' : 'รีเฟรช'}
-          </button>
+          <RefreshButton onClick={fetchReqs} disabled={reqsLoading} loading={reqsLoading} />
         </div>
 
         {reqsLoading ? (

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Design review · tunnel-manager (web)</title><style>
+:root{
+  --bg:#0e0e10;--panel:#18181b;--panel2:#1f1f23;--border:#27272a;
+  --fg:#e4e4e7;--muted:#a1a1aa;--dim:#71717a;
+  --high:#ef4444;--med:#f59e0b;--low:#52525b;--keep:#22c55e;--gold:#f5c542;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.6 "Segoe UI","Leelawadee UI",system-ui,sans-serif}
+a{color:#60a5fa;text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:980px;margin:0 auto;padding:28px 22px 80px}
+h1{font-size:22px;margin:0 0 6px;border-bottom:1px solid var(--border);padding-bottom:16px}
+h2{font-size:17px;margin:30px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+h3{font-size:15px;margin:18px 0 8px}
+p{color:var(--muted)}
+code{background:var(--panel2);border:1px solid var(--border);border-radius:4px;
+  padding:1px 5px;font:12.5px "Cascadia Mono","Consolas",monospace}
+pre{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  padding:12px 14px;overflow:auto}
+pre code{border:0;background:none;padding:0}
+strong{color:var(--fg)}
+blockquote{margin:18px 0;padding:12px 16px;border-radius:10px;
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
+blockquote p{color:#fcd34d;margin:4px 0}
+ul,ol{padding-left:0}
+li{list-style:none;background:var(--panel);border:1px solid var(--border);
+  border-left:4px solid var(--low);border-radius:10px;padding:11px 15px;margin:0 0 10px;color:var(--muted)}
+li strong:first-child{color:var(--fg)}
+li ul,li ol{margin-top:8px;padding-left:0}
+li li{background:var(--panel2);margin:6px 0;padding:7px 12px}
+li:has(.badge.high){border-left-color:var(--high)}
+li:has(.badge.med){border-left-color:var(--med)}
+li:has(.badge.low){border-left-color:var(--low)}
+ol.steps-numbered li{counter-increment:none}
+.badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;
+  border-radius:5px;text-transform:uppercase;white-space:nowrap}
+.badge.high{background:var(--high);color:#fff}
+.badge.med{background:var(--med);color:#3a2a00}
+.badge.low{background:var(--low);color:#fff}
+.meta{color:var(--muted);font-size:13px;margin:-4px 0 4px}
+figure{margin:22px 0 26px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#000}
+figure img{display:block;width:100%;height:auto}
+figcaption{padding:9px 14px;color:var(--muted);font-size:12px;background:var(--panel)}
+.missing-shot{padding:10px 14px;color:#fca5a5;background:rgba(239,68,68,.08);
+  border:1px solid rgba(239,68,68,.3);border-radius:8px;margin:10px 0;font-size:13px}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
+  color:var(--dim);font-size:12px}
+</style></head><body><div class="wrap"><div class="meta">2026-06-20 · tunnel-manager (web) · critic + gemini</div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/dashboard-desktop.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/dashboard-mobile.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/create-modal-desktop.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/create-modal-mobile.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/nginx-desktop.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/nginx-mobile.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/docker-desktop.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/docker-mobile.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/docker-logs-desktop.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/docker-logs-mobile.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/settings-desktop.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/settings-mobile.png</code></div><div class="missing-shot">⚠ screenshot not found: <code>screenshots/design-review/sidebar-mobile.png</code></div><h1>UI review · tunnel-manager (web) · 2026-06-20</h1>
+<h2>📸 Scope</h2>
+<p>Admin console จัดการ Cloudflare tunnels (theme zinc/orange dark). รีวิว 7 views × desktop+mobile หลังเพิ่ม 2 หน้าใหม่ (Nginx reverse proxy generator, Docker panel), แก้ Create modal (domain dropdown), Settings (domains section) และลบหน้า DNS. เป้าหมาย: ตรวจ Nielsen heuristics + mobile responsive + visual hierarchy/consistency ระหว่างหน้าใหม่กับหน้าเดิม แล้วเสนอแก้ที่ frontend สั่งทำได้เลย (มี file:line + class). ต่อยอดจาก 8 จุดที่ QA เจอ — ขุดให้ลึกกว่า ไม่ซ้ำเฉยๆ.</p>
+<h2>✅ ของดีที่ควรเก็บไว้</h2>
+<ul>
+<li>Theme zinc/orange สม่ำเสมอ, card <code>rounded-2xl</code> + <code>border-zinc-800</code> ทุกหน้า</li>
+<li>มี skeleton loader จริง (nginx <code>animate-pulse</code>, docker <code>h-16</code> placeholder) + error state (docker)</li>
+<li>Status badge (running/exited/stopped) อ่านง่าย ใช้สี emerald/zinc คงเส้นคงวา</li>
+<li><code>Button.tsx</code> มี <code>min-h-[48px]</code> + disabled state ที่ "ตายชัด" (<code>bg-zinc-800 text-zinc-600</code>) — เป็น pattern ที่ถูกต้องอยู่แล้ว (ปัญหาคือ inline button ไม่ได้ใช้ตามนี้ → ดูข้อ R1)</li>
+<li>Input <code>focus-within:border-orange-500/60</code> — affordance focus ชัด</li>
+<li>Create modal มี live preview hostname (<code>→ myapp.sabuytube.xyz</code>) ดีมาก</li>
+</ul>
+<hr />
+<h2>🗂️ ตาราง findings (เรียง high-impact ก่อน)</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>view</th>
+<th>issue</th>
+<th>severity</th>
+<th>proposal (สั่ง frontend ทำได้เลย)</th>
+<th>impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td><strong>ทุก form</strong> (modal/nginx/settings)</td>
+<td><strong>Disabled vs enabled ปุ่มแยกไม่ออก + treatment ไม่ตรงกัน</strong> — <code>Button.tsx</code> disabled = dead-zinc (ถูก) แต่ inline submit ใช้ <code>disabled:opacity-40</code> บน <code>bg-orange-500</code> → ขึ้นเป็น "ส้มจางๆ" อ่านว่ายังกดได้ (= ที่ QA เห็นว่า "ปุ่มส้มดูหม่น/disabled")</td>
+<td><strong>high</strong></td>
+<td>เปลี่ยน inline submit ทั้งหมดให้ใช้ <code>&lt;Button&gt;</code> component <strong>หรือ</strong> replace <code>disabled:opacity-40</code> → <code>disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed</code>. ไฟล์: <code>app/nginx/page.tsx:157</code> (เพิ่ม Site), <code>app/settings/page.tsx</code> (บันทึก), <code>components/CreateTunnelModal.tsx</code> (สร้าง Tunnel). Gemini ยืนยัน: enabled ต้องเป็น orange-500 สด + text-white</td>
+<td>รู้ทันทีว่าอะไรกดได้ ลด rage-click</td>
+</tr>
+<tr>
+<td>R2</td>
+<td><strong>create-modal mobile</strong></td>
+<td><strong>suffix <code>.sabuytube.xyz</code> ถูกตัดขอบขวา (overflow)</strong> — <code>CreateTunnelModal.tsx:126-134</code>: input <code>flex-1</code> ไม่มี <code>min-w-0</code> (ไม่ยอมหด) + suffix span ไม่มี <code>flex-shrink-0</code>, container เป็น <code>overflow-hidden</code> → suffix โดนตัด (QA #1)</td>
+<td><strong>high</strong></td>
+<td><code>input</code> (L132) เพิ่ม <code>min-w-0</code>; suffix <code>&lt;span&gt;</code> (L134) เพิ่ม <code>flex-shrink-0</code>. ถ้า domain ยาวมาก พิจารณา <code>text-xs</code> บน mobile. ทดสอบที่ 360–375px</td>
+<td>user เห็นว่ากำลังสร้างบน domain ไหน — กันสร้างผิด</td>
+</tr>
+<tr>
+<td>R3</td>
+<td><strong>nginx desktop/mobile</strong></td>
+<td><strong>ปุ่ม "Export bundle" เป็น CTA หลักของ card แต่ทำเป็น ghost gray → ดูเหมือน disabled</strong> (QA #7) — <code>app/nginx/page.tsx:173</code> ใช้ <code>bg-zinc-900 border-zinc-700</code></td>
+<td><strong>high</strong></td>
+<td>ยกระดับ Export = primary orange (<code>bg-orange-500 ... text-white</code>) + ใส่ไอคอน ⬇ ด้านหน้า. ตอนนี้ "เพิ่ม Site" (orange) เด่นกว่า action จริง — สลับ priority ให้ Export เด่น</td>
+<td>คนหา action หลักเจอ ลด drop-off ตอน export</td>
+</tr>
+<tr>
+<td>R4</td>
+<td><strong>docker mobile</strong></td>
+<td><strong>ชื่อ container ถูก truncate เหลือ "tunnel-tun…" จนแยกไม่ออก</strong> — <code>app/docker/page.tsx:161</code> แถวเดียว <code>flex items-center</code> ให้ชื่อ (<code>truncate</code>) แย่งที่กับปุ่ม Restart/Stop/Logs → 375px ชื่อหายเกือบหมด</td>
+<td><strong>high</strong></td>
+<td>แถว <code>&lt;li&gt;</code> (L161): <code>flex-col items-stretch gap-2 sm:flex-row sm:items-center</code>; แถวปุ่ม (L170) <code>flex-wrap</code>. บน mobile ให้ block ชื่อกินเต็มบรรทัดบน, ปุ่มลงบรรทัดล่าง</td>
+<td>mobile ใช้งานจริงได้ (ตอนนี้ระบุ container ไม่ได้ = ฟังก์ชันหลักพัง)</td>
+</tr>
+<tr>
+<td>R5</td>
+<td><strong>docker desktop/mobile</strong></td>
+<td><strong>30+ container ไม่มี search/filter</strong> (QA #4)</td>
+<td><strong>high</strong></td>
+<td>เพิ่ม search input (filter ตาม name+image) + status chips <code>All / Running / Exited</code> เหนือ list. <strong>reuse pattern เดิมจาก <code>app/page.tsx:181</code></strong> (dashboard มี search+chips อยู่แล้ว) เพื่อ consistency หน้าใหม่↔เดิม</td>
+<td>หา container เจอใน 30+ รายการ</td>
+</tr>
+<tr>
+<td>R6</td>
+<td><strong>sidebar mobile</strong></td>
+<td><strong>drawer เปิดแต่ไม่มี backdrop dimming</strong> — content ข้างหลังสว่างเท่าเดิม ไม่รู้ว่าแตะนอกปิดได้ (QA #8)</td>
+<td><strong>high</strong></td>
+<td>เพิ่ม scrim <code>&lt;div className="fixed inset-0 z-40 bg-black/60" onClick={closeDrawer}/&gt;</code> ใต้ drawer (drawer ยก z สูงกว่า). ไฟล์ <code>app/client-layout.tsx</code>. เพิ่ม transition fade</td>
+<td>drawer อ่านเป็น modal ชัด + tap-outside-to-close</td>
+</tr>
+<tr>
+<td>R7</td>
+<td><strong>dashboard desktop/mobile</strong></td>
+<td><strong>3 bulk buttons สีจัดแข่งกัน (orange/green/red) ไม่มี primary ชัด + mobile wrap 2+1 โกโรโกโส</strong> (QA #2) — <code>app/page.tsx:115-139</code></td>
+<td><strong>med</strong></td>
+<td>คง "New Tunnel" = primary orange. ลด "เริ่มทั้งหมด/หยุดทั้งหมด" → secondary outline (<code>bg-transparent border border-emerald-700 text-emerald-400</code> / <code>border-red-700 text-red-400</code>) + ใส่ไอคอน. แยก group bulk ออกจาก New Tunnel ด้วย gap/divider. ขนาดเล็กลงแล้วจะไม่ wrap</td>
+<td>hierarchy ชัด 1 primary + fix mobile wrap</td>
+</tr>
+<tr>
+<td>R8</td>
+<td><strong>dashboard desktop/mobile</strong></td>
+<td><strong>badge <code>docker</code> ลอยมุมขวาบน ไม่มี context</strong> (QA #3) — <code>app/page.tsx</code> runtime-mode badge โดดเดี่ยว (ใน Settings มี card "Runtime Mode" ครอบ แต่ที่ dashboard เปล่าๆ)</td>
+<td><strong>med</strong></td>
+<td>ย้าย badge มา inline ข้าง title "Tunnels" ใน header (ไม่ลอย), ใส่ label <code>Runtime: Docker</code> + ไอคอน + <code>title=</code> tooltip. <strong>หรือ</strong> ลบออกจาก dashboard (ข้อมูลซ้ำกับ Settings อยู่แล้ว). แนะนำ inline+label</td>
+<td>เข้าใจว่า badge บอกอะไร</td>
+</tr>
+<tr>
+<td>R9</td>
+<td><strong>docker logs desktop/mobile</strong></td>
+<td><strong>log panel ไม่มี autoscroll/copy/clear; รู้สึกแน่น</strong> (QA #5) — <code>app/docker/page.tsx:53,69</code> modal สูง 80vh แต่ content เกาะบน เหลือที่ว่างล่าง + ไม่ scroll ตาม log ใหม่</td>
+<td><strong>med</strong></td>
+<td>(1) autoscroll ไป bottom เมื่อมี line ใหม่ (<code>useEffect</code> + <code>scrollIntoView</code>). (2) ปุ่ม Copy all + Clear ใน header modal. (3) เพิ่ม empty/error state ("ยังไม่มี log" / "เชื่อมต่อ log ไม่สำเร็จ" — ตอนนี้มีแค่ "กำลังรับ log..."). (4) <code>leading-5</code>→<code>leading-6</code> หายใจขึ้น</td>
+<td>อ่าน log ยาวๆ ได้จริง ไม่ต้องเลื่อนเอง</td>
+</tr>
+<tr>
+<td>R10</td>
+<td><strong>nginx/docker/settings</strong></td>
+<td><strong>ลิงก์ "รีเฟรช" เล็ก contrast ต่ำ touch target &lt;44px</strong> — <code>nginx:103</code>, <code>docker:139</code>, settings: <code>text-xs text-zinc-500</code></td>
+<td><strong>med</strong></td>
+<td>แปลงเป็น icon button ↻ ขนาด ≥40×40, <code>text-zinc-400 hover:text-zinc-200</code>, <code>aria-label="รีเฟรช"</code>. ทำเป็น component ใช้ร่วม 3 หน้าให้ consistency</td>
+<td>touch ติด + เห็นชัดขึ้น</td>
+</tr>
+<tr>
+<td>R11</td>
+<td><strong>dashboard</strong></td>
+<td><strong>per-card "หยุด" เป็น neutral dark แต่ bulk "หยุดทั้งหมด" เป็นแดง</strong> — semantic stop สองภาษา</td>
+<td><strong>low</strong></td>
+<td>เลือกภาษาเดียว: ถ้า R7 ลด bulk เป็น outline-red แล้ว ให้ per-card stop ใช้ hover เป็น danger-text ด้วย (<code>hover:text-red-400</code>) เพื่อ map กัน</td>
+<td>ภาษาสีสม่ำเสมอ</td>
+</tr>
+<tr>
+<td>R12</td>
+<td><strong>dashboard</strong></td>
+<td><strong>search ไม่มี empty-result state</strong> — filter ไม่เจอจะโล่ง</td>
+<td><strong>low</strong></td>
+<td>เพิ่ม "ไม่พบ tunnel ที่ตรงกับคำค้นหา" เมื่อ filter ได้ 0 (มี empty state ตอนไม่มี tunnel อยู่แล้วที่ <code>app/page.tsx:213</code> — เพิ่ม variant สำหรับ no-match)</td>
+<td>feedback ชัดเวลาค้นไม่เจอ</td>
+</tr>
+<tr>
+<td>R13</td>
+<td><strong>nginx/docker vs dashboard/settings</strong></td>
+<td><strong>consistency: หน้าใหม่มี intro paragraph card, หน้าเดิมไม่มี subtitle</strong></td>
+<td><strong>low</strong></td>
+<td>เพิ่ม subtitle 1 บรรทัดใต้ page title ของ dashboard/settings ให้ parity (เช่น "จัดการ Cloudflare tunnels ทั้งหมด")</td>
+<td>จังหวะหัวหน้าเพจสม่ำเสมอ</td>
+</tr>
+<tr>
+<td>R14</td>
+<td><strong>modal/dashboard</strong></td>
+<td><strong>touch target เล็ก: copy-icon ข้าง domain, ปุ่ม X close</strong> — ต่ำกว่า 44px</td>
+<td><strong>low</strong></td>
+<td>copy icon + close X → กล่อง hit ≥40×40 (<code>w-10 h-10</code> หรือ <code>p-2.5</code>), เพิ่ม <code>aria-label</code></td>
+<td>นิ้วแตะติดบน mobile</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>🚩 Heuristic violations (Nielsen)</h2>
+<ul>
+<li><strong>#1 Visibility of system status</strong> — docker log ไม่ autoscroll + ไม่มี state "เชื่อมต่อไม่สำเร็จ" (R9); badge <code>docker</code> ไม่บอกว่าคืออะไร (R8)</li>
+<li><strong>#4 Consistency &amp; standards</strong> — disabled treatment ไม่ตรงกันระหว่าง <code>Button.tsx</code> กับ inline button (R1); stop สองภาษาสี (R11); search/filter มีที่ dashboard แต่ไม่มีที่ docker (R5)</li>
+<li><strong>#6 Recognition rather than recall</strong> — docker mobile ชื่อ container หาย ต้องเดา (R4)</li>
+<li><strong>#7 Flexibility &amp; efficiency</strong> — ไม่มี search ใน 30+ container (R5); ไม่มี copy log (R9)</li>
+<li><strong>#8 Aesthetic &amp; minimalist</strong> — dashboard 3 ปุ่มสีจัดแข่งกัน ไม่มี focal point (R7)</li>
+<li><strong>#5 Error prevention</strong> — create modal mobile เห็น domain ไม่ครบ → เสี่ยงสร้างผิด domain (R2)</li>
+</ul>
+<h2>🎯 Recommended next steps (สำหรับ Lead) — Top 5 high-impact</h2>
+<ol>
+<li><strong>[high] delegate frontend → R1</strong>: standardize disabled state (inline button → ใช้ <code>&lt;Button&gt;</code> หรือ dead-zinc) — <code>nginx/page.tsx:157</code>, <code>settings/page.tsx</code>, <code>CreateTunnelModal.tsx</code></li>
+<li><strong>[high] R2</strong>: fix suffix overflow — <code>CreateTunnelModal.tsx:132</code> เพิ่ม <code>min-w-0</code>, L134 เพิ่ม <code>flex-shrink-0</code></li>
+<li><strong>[high] R4 + R5</strong>: docker mobile stack layout (<code>docker/page.tsx:161</code>) + เพิ่ม search/filter reuse pattern จาก <code>page.tsx:181</code></li>
+<li><strong>[high] R3</strong>: Export bundle → primary orange + icon (<code>nginx/page.tsx:173</code>)</li>
+<li><strong>[high] R6</strong>: sidebar backdrop scrim (<code>client-layout.tsx</code>)</li>
+</ol>
+<blockquote>
+<p>R7–R10 (med) ทำรอบถัดไป: dashboard bulk hierarchy, badge context, docker-log autoscroll/copy, refresh icon button.</p>
+</blockquote><footer>Generated by agent_takkub.design_review_html · self-contained (screenshots inlined) · open in any browser</footer></div></body></html>

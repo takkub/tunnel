@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import RefreshButton from '@/components/RefreshButton'
 
 interface NginxSite {
   serverName: string
@@ -100,9 +101,7 @@ export default function NginxPage() {
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">Sites</h2>
-          <button onClick={fetchSites} disabled={loading} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40">
-            {loading ? 'โหลด...' : 'รีเฟรช'}
-          </button>
+          <RefreshButton onClick={fetchSites} disabled={loading} loading={loading} />
         </div>
 
         {loading ? (
@@ -154,7 +153,7 @@ export default function NginxPage() {
           <button
             type="submit"
             disabled={adding || !serverName || !upstream}
-            className="min-h-[44px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:opacity-40 transition-all duration-150 flex items-center justify-center gap-2"
+            className="min-h-[44px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
           >
             {adding && <Spinner />}
             เพิ่ม Site
@@ -170,9 +169,15 @@ export default function NginxPage() {
         <button
           onClick={handleExport}
           disabled={exporting || sites.length === 0}
-          className="min-h-[44px] w-full rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-sm font-semibold disabled:opacity-40 transition-all duration-150 flex items-center justify-center gap-2"
+          className="min-h-[44px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
         >
-          {exporting && <Spinner />}
+          {exporting ? <Spinner /> : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          )}
           Export bundle
         </button>
 

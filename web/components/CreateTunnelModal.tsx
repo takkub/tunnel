@@ -80,7 +80,7 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
 
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-zinc-100">สร้าง Tunnel ใหม่</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center justify-center text-sm transition-colors">
+          <button onClick={onClose} className="w-10 h-10 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center justify-center text-sm transition-colors">
             ✕
           </button>
         </div>
@@ -129,9 +129,9 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
                   placeholder="myapp"
                   value={subdomain}
                   onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  className="flex-1 bg-transparent px-4 py-3.5 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none"
+                  className="flex-1 min-w-0 bg-transparent px-4 py-3.5 text-base text-zinc-100 placeholder-zinc-600 focus:outline-none"
                 />
-                <span className="pr-4 text-zinc-500 text-sm whitespace-nowrap">.{selectedDomain || '…'}</span>
+                <span className="pr-4 text-zinc-500 text-sm whitespace-nowrap flex-shrink-0">.{selectedDomain || '…'}</span>
               </div>
               {hostname && (
                 <p className="mt-1.5 text-xs text-orange-400/80 flex items-center gap-1">
@@ -164,7 +164,7 @@ export default function CreateTunnelModal({ onSuccess, onClose }: Props) {
               <button
                 type="submit"
                 disabled={loading || !hostname || noDomains}
-                className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-base font-semibold disabled:opacity-40 transition-all duration-150 flex items-center justify-center gap-2"
+                className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-base font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
               >
                 {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 {loading ? 'กำลังสร้าง...' : 'สร้าง Tunnel'}
