@@ -14,6 +14,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   const [showDns, setShowDns] = useState(false)
   const [dnsHost, setDnsHost] = useState('')
   const [dnsLoading, setDnsLoading] = useState(false)
+  const [dnsSuccess, setDnsSuccess] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -34,20 +35,37 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
     setConfirmDelete(false)
   }
 
-  const routeDns = async () => {
-    if (!dnsHost.trim()) return
+  const routeDns = async (hostname: string) => {
+    if (!hostname.trim()) return
     setDnsLoading(true)
     const res = await fetch(`/api/tunnels/${tunnel.name}/route-dns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: dnsHost.trim() }),
+      body: JSON.stringify({ hostname: hostname.trim() }),
     })
     const data = await res.json()
     onToast(data.message ?? data.error ?? 'เสร็จแล้ว', res.ok ? 'success' : 'error')
+    if (res.ok) { setDnsSuccess(true); setTimeout(() => setDnsSuccess(false), 2000) }
     setDnsLoading(false)
     setShowDns(false)
     setDnsHost('')
     await onRefresh()
+  }
+
+  const handleGlobeClick = () => {
+    if (showDns) {
+      setShowDns(false)
+      setDnsHost('')
+    } else if (hasHostname) {
+      routeDns(tunnel.hostname!)
+    } else {
+      setShowDns(true)
+    }
+  }
+
+  const openChangeHostname = () => {
+    setShowDns(true)
+    setDnsHost(tunnel.hostname ?? '')
   }
 
   const copyHostname = () => {
@@ -126,21 +144,31 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
 
           {/* DNS button */}
           <button
-            onClick={() => { setShowDns(v => !v); setDnsHost('') }}
-            disabled={busy}
+            onClick={handleGlobeClick}
+            disabled={busy || dnsLoading}
             aria-label="Route DNS"
-            title="Route DNS"
+            title={hasHostname && !showDns ? `Route DNS: ${tunnel.hostname}` : 'Route DNS'}
             className={`min-h-[44px] w-11 rounded-lg border text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center ${
               showDns
                 ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                : dnsSuccess
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
             }`}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-            </svg>
+            {dnsLoading ? (
+              <span className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-300 rounded-full animate-spin" />
+            ) : dnsSuccess ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              </svg>
+            )}
           </button>
 
           {/* Delete button */}
@@ -180,7 +208,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
           )}
         </div>
 
-        {/* DNS expand */}
+        {/* DNS expand — change hostname */}
         {showDns && (
           <div className="flex gap-1.5 items-center animate-slide-up">
             <input
@@ -190,11 +218,11 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               placeholder="sub.example.com"
               aria-label="Hostname สำหรับ DNS route"
               className="flex-1 bg-zinc-900 text-zinc-100 text-xs rounded-lg px-3 outline-none border border-zinc-700 focus:border-blue-500 min-h-[44px] placeholder:text-zinc-500 transition-colors"
-              onKeyDown={e => e.key === 'Enter' && routeDns()}
+              onKeyDown={e => e.key === 'Enter' && routeDns(dnsHost)}
               autoFocus
             />
             <button
-              onClick={routeDns}
+              onClick={() => routeDns(dnsHost)}
               disabled={dnsLoading || !dnsHost.trim()}
               className="px-3 min-h-[44px] rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium disabled:opacity-40 transition-all duration-150"
             >
@@ -207,6 +235,16 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               ✕
             </button>
           </div>
+        )}
+
+        {/* Secondary affordance: change hostname (only when hostname already set) */}
+        {hasHostname && !showDns && (
+          <button
+            onClick={openChangeHostname}
+            className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors leading-none"
+          >
+            เปลี่ยน hostname
+          </button>
         )}
       </div>
     </div>
