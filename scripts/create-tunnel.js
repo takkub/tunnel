@@ -61,19 +61,26 @@ try {
 
   // cert.pem from ~/.cloudflared
   const certSrc = path.join(cloudflaredHome, 'cert.pem');
-  if (fs.existsSync(certSrc)) fs.copyFileSync(certSrc, path.join(configDir, 'cert.pem'));
+  if (fs.existsSync(certSrc)) {
+    const certDest = path.join(configDir, 'cert.pem');
+    fs.copyFileSync(certSrc, certDest);
+    try { fs.chmodSync(certDest, 0o644); } catch {}
+  }
 
   // credentials JSON — cloudflared.exe writes to ~/.cloudflared/<uuid>.json
   const credFile = `${tunnelId}.json`;
   const credSrc = path.join(cloudflaredHome, credFile);
   if (fs.existsSync(credSrc)) {
-    fs.copyFileSync(credSrc, path.join(configDir, credFile));
+    const credDest = path.join(configDir, credFile);
+    fs.copyFileSync(credSrc, credDest);
+    try { fs.chmodSync(credDest, 0o644); } catch {}
   } else {
     process.stderr.write(`Warning: credentials not found at ${credSrc}\n`);
   }
 
   // config.yml
-  fs.writeFileSync(path.join(configDir, 'config.yml'), `tunnel: ${tunnelId}
+  const configDest = path.join(configDir, 'config.yml');
+  fs.writeFileSync(configDest, `tunnel: ${tunnelId}
 credentials-file: /etc/cloudflared/${tunnelId}.json
 
 protocol: auto
@@ -83,6 +90,7 @@ ingress:
     service: http://host.docker.internal:${port}
   - service: http_status:404
 `);
+  try { fs.chmodSync(configDest, 0o644); } catch {}
 
   // docker-compose inside tunnel folder (volume . = this folder)
   fs.writeFileSync(path.join(configDir, 'docker-compose.yml'), `version: '3.8'
@@ -91,6 +99,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-tunnel-${tunnelName}
     restart: unless-stopped
+    user: "0:0"
     command: tunnel --config /etc/cloudflared/config.yml run
     volumes:
       - .:/etc/cloudflared

@@ -1,0 +1,34 @@
+const fs = require('fs');
+const path = require('path');
+
+const CONFIG_PATH = path.join(__dirname, '..', 'domains.config.json');
+
+function loadDomains() {
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')).domains || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDomains(domains) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ domains }, null, 2) + '\n');
+}
+
+/** Extract root domain from hostname, e.g. app.sabuytube.xyz -> sabuytube.xyz */
+function rootDomain(hostname) {
+  const parts = hostname.split('.');
+  return parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+}
+
+/**
+ * Return zoneId for a hostname by matching its root domain in domains.config.json.
+ * Falls back to process.env.ZONE_ID if no match found.
+ */
+function getZoneIdForHostname(hostname) {
+  const rd = rootDomain(hostname);
+  const entry = loadDomains().find(d => d.domain === rd);
+  return (entry && entry.zoneId) || process.env.ZONE_ID || null;
+}
+
+module.exports = { loadDomains, saveDomains, getZoneIdForHostname, rootDomain };

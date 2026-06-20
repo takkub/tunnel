@@ -5,6 +5,8 @@ import Toast from '@/components/Toast'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
 
+interface DomainEntry { domain: string; zoneId: string }
+
 interface RuntimeInfo {
   mode: RuntimeMode
   dockerAvailable: boolean
@@ -52,9 +54,67 @@ export default function SettingsPage() {
   const [selectedMode, setSelectedMode] = useState<RuntimeMode>('auto')
   const [savingRuntime, setSavingRuntime] = useState(false)
 
+  // Domains
+  const [domains, setDomains] = useState<DomainEntry[]>([])
+  const [domainsLoading, setDomainsLoading] = useState(true)
+  const [domainInput, setDomainInput] = useState('')
+  const [zoneIdInput, setZoneIdInput] = useState('')
+  const [addingDomain, setAddingDomain] = useState(false)
+  const [deletingDomain, setDeletingDomain] = useState<string | null>(null)
+
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
+  }
+
+  const fetchDomains = async () => {
+    setDomainsLoading(true)
+    try {
+      const res = await fetch('/api/settings/domains')
+      if (res.ok) {
+        const data = await res.json()
+        setDomains(data.domains ?? [])
+      }
+    } catch { /* API not ready */ }
+    finally { setDomainsLoading(false) }
+  }
+
+  const handleAddDomain = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!domainInput || !zoneIdInput) return
+    setAddingDomain(true)
+    try {
+      const res = await fetch('/api/settings/domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: domainInput.trim(), zoneId: zoneIdInput.trim() }),
+      })
+      if (res.ok) {
+        setDomainInput('')
+        setZoneIdInput('')
+        showToast('เพิ่ม domain แล้ว', 'success')
+        fetchDomains()
+      } else {
+        const data = await res.json()
+        showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+      }
+    } catch { showToast('ไม่สามารถเพิ่มได้', 'error') }
+    finally { setAddingDomain(false) }
+  }
+
+  const handleDeleteDomain = async (domain: string) => {
+    setDeletingDomain(domain)
+    try {
+      const res = await fetch(`/api/settings/domains?domain=${encodeURIComponent(domain)}`, { method: 'DELETE' })
+      if (res.ok) {
+        showToast('ลบ domain แล้ว', 'success')
+        fetchDomains()
+      } else {
+        const data = await res.json()
+        showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+      }
+    } catch { showToast('ไม่สามารถลบได้', 'error') }
+    finally { setDeletingDomain(null) }
   }
 
   const fetchReqs = async () => {
@@ -102,6 +162,7 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchReqs()
     fetchRuntime()
+    fetchDomains()
   }, [])
 
   return (
@@ -175,6 +236,70 @@ export default function SettingsPage() {
             </Button>
           </>
         )}
+      </section>
+
+      {/* Domains */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-zinc-200">Domains</h2>
+          <button onClick={fetchDomains} disabled={domainsLoading} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40">
+            {domainsLoading ? 'โหลด...' : 'รีเฟรช'}
+          </button>
+        </div>
+
+        {domainsLoading ? (
+          <div className="space-y-2 animate-pulse">
+            {[1, 2].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
+          </div>
+        ) : domains.length === 0 ? (
+          <p className="text-sm text-zinc-500">ยังไม่มี domain</p>
+        ) : (
+          <ul className="space-y-2">
+            {domains.map(d => (
+              <li key={d.domain} className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-100 font-mono truncate">{d.domain}</p>
+                  <p className="text-xs text-zinc-500 font-mono truncate">{d.zoneId}</p>
+                </div>
+                <button
+                  onClick={() => handleDeleteDomain(d.domain)}
+                  disabled={deletingDomain === d.domain}
+                  className="flex-shrink-0 w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center text-sm transition-colors disabled:opacity-40"
+                  aria-label={`ลบ ${d.domain}`}
+                >
+                  {deletingDomain === d.domain ? <span className="w-3 h-3 border border-zinc-500 border-t-zinc-300 rounded-full animate-spin" /> : '✕'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form onSubmit={handleAddDomain} className="space-y-2 pt-1">
+          <input
+            type="text"
+            required
+            placeholder="example.com"
+            value={domainInput}
+            onChange={e => setDomainInput(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Zone ID (จาก Cloudflare)"
+            value={zoneIdInput}
+            onChange={e => setZoneIdInput(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={addingDomain || !domainInput || !zoneIdInput}
+            className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:opacity-40 transition-all duration-150 flex items-center justify-center gap-2"
+          >
+            {addingDomain && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            เพิ่ม Domain
+          </button>
+        </form>
       </section>
 
       {/* Requirements */}

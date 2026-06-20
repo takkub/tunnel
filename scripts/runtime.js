@@ -115,6 +115,7 @@ function dockerStart(name) {
     execSync(
       `docker run -d` +
       ` --name "${containerName}"` +
+      ` --user 0:0` +
       ` --restart unless-stopped` +
       ` --label com.docker.compose.project=tunnel` +
       ` --label "com.docker.compose.service=cloudflared-${name}"` +

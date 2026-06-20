@@ -1,5 +1,6 @@
 try { require('dotenv').config(); } catch {}
 const { listDnsRecords, deleteDnsRecord } = require('./cloudflare-api');
+const { loadDomains } = require('./domains');
 const ui = require('./ui-helper');
 const readline = require('readline');
 
@@ -22,19 +23,29 @@ function question(query) {
 async function main() {
     ui.warningHeader('Cleanup CNAMEs', 'Delete ALL Tunnel CNAME records');
 
-    const zoneId = process.env.ZONE_ID;
     const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
-    if (!zoneId || !apiToken) {
+    // Build list of zones from domains.config.json; fallback to env ZONE_ID
+    const configuredDomains = loadDomains();
+    const zones = configuredDomains.length
+      ? configuredDomains.map(d => ({ domain: d.domain, zoneId: d.zoneId }))
+      : process.env.ZONE_ID ? [{ domain: 'default', zoneId: process.env.ZONE_ID }] : [];
+
+    if (!apiToken || zones.length === 0) {
         ui.error('Missing .env configuration');
-        console.log(`  ${ui.c.dim}Please check check your .env file:${ui.c.reset}`);
+        console.log(`  ${ui.c.dim}Please check your .env file (CLOUDFLARE_API_TOKEN) and domains.config.json${ui.c.reset}`);
         process.exit(1);
     }
 
-    ui.step(1, 2, `${ui.icons.cloud} Scanning for Tunnel CNAME records...`);
+    ui.step(1, 2, `${ui.icons.cloud} Scanning ${zones.length} zone(s) for Tunnel CNAME records...`);
 
     try {
-        const records = await listDnsRecords(zoneId, apiToken);
+        const allRecords = [];
+        for (const z of zones) {
+          const recs = await listDnsRecords(z.zoneId, apiToken);
+          allRecords.push(...recs.map(r => ({ ...r, _zoneId: z.zoneId })));
+        }
+        const records = allRecords;
 
         // Filter for CNAMEs pointing to cfargotunnel.com
         const cnames = records.filter(r =>
@@ -84,7 +95,7 @@ async function main() {
 
         for (const record of cnames) {
             process.stdout.write(`  ${ui.c.dim}Deleting ${record.name}... ${ui.c.reset}`);
-            const success = await deleteDnsRecord(zoneId, record.id, apiToken);
+            const success = await deleteDnsRecord(record._zoneId, record.id, apiToken);
 
             if (success) {
                 console.log(`${ui.c.green}OK${ui.c.reset}`);
