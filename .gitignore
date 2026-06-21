@@ -103,3 +103,27 @@ CNAME_FIX.md
 
 web/.next/
 /runtime.config.json
+
+# Generated nginx configs
+nginx/edge-snippet.conf
+nginx/conf.d/*.conf
+!nginx/conf.d/.gitkeep
+
+# QA / dev artifacts
+web/screenshots/
+.playwright-mcp/
+web/.playwright-mcp/
+
+# Build artifacts
+web/tsconfig.tsbuildinfo
+
+# Logs / error artifacts
+*.log.err
+web-verify.err
+
+# Runtime state
+runtime/
+tunnels/
+
+# Tooling
+.claude/
