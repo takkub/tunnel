@@ -10,6 +10,7 @@ interface Tunnel {
   running: boolean
   containerId?: string
   hostname?: string
+  port?: number | null
 }
 
 type FilterType = 'all' | 'running' | 'stopped'

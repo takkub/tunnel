@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 
-interface Tunnel { name: string; running: boolean; hostname?: string }
+interface Tunnel { name: string; running: boolean; hostname?: string; port?: number | null }
 
 interface Props {
   tunnel: Tunnel
@@ -105,7 +105,17 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
                     </svg>
                   )}
                 </button>
+                {tunnel.port != null && (
+                  <span className="flex-shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400">
+                    :{tunnel.port}
+                  </span>
+                )}
               </div>
+            )}
+            {!hasHostname && tunnel.port != null && (
+              <p className="mt-0.5 font-mono text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 inline-block">
+                :{tunnel.port}
+              </p>
             )}
           </div>
           <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
