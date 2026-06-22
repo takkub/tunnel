@@ -53,7 +53,7 @@ function LogPanel({ container, onClose }: { container: Container; onClose: () =>
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full max-w-3xl bg-zinc-950 border border-zinc-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+      <div className="relative w-full max-w-[95vw] bg-zinc-950 border border-zinc-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ maxHeight: '92vh' }}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
           <div>
             <p className="text-sm font-semibold text-zinc-200">{container.name}</p>
@@ -96,7 +96,7 @@ function LogPanel({ container, onClose }: { container: Container; onClose: () =>
         <pre
           ref={preRef}
           className="flex-1 overflow-y-auto p-4 text-xs font-mono text-zinc-300 leading-6 whitespace-pre-wrap break-words"
-          style={{ background: '#0a0a0c', minHeight: 200 }}
+          style={{ background: '#0a0a0c', minHeight: '60vh' }}
         >
           {lines.length === 0
             ? <span className={esError ? 'text-red-400' : 'text-zinc-600'}>
