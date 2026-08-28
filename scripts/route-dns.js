@@ -1,6 +1,5 @@
 const { execFileSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const { findCloudflared } = require('./cloudflared-bin');
 
 const tunnelName = process.argv[2];
 const hostname = process.argv[3];
@@ -15,16 +14,14 @@ if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(tunnelName)) {
   process.exit(1);
 }
 
-function getCloudflaredBin() {
-  const localExe = path.join(__dirname, '..', 'cloudflared.exe');
-  if (fs.existsSync(localExe)) return localExe;
-  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
-  console.error('cloudflared not found');
+const bin = findCloudflared();
+if (!bin) {
+  console.error('cloudflared not found. Run "npm run login" to download it.');
   process.exit(1);
 }
 
 try {
-  const out = execFileSync(getCloudflaredBin(), ['tunnel', 'route', 'dns', tunnelName, hostname], { encoding: 'utf8', stdio: 'pipe' });
+  const out = execFileSync(bin, ['tunnel', 'route', 'dns', tunnelName, hostname], { encoding: 'utf8', stdio: 'pipe' });
   process.stdout.write(out || 'DNS route updated\n');
   process.exit(0);
 } catch (err) {

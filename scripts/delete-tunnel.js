@@ -1,12 +1,11 @@
-const { execSync, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const ui = require('./ui-helper');
-const { getTunnelNames } = require('./runtime');
-try { require('dotenv').config({ path: path.join(__dirname, '..', '.env') }); } catch {}
-
-const projectRoot = path.join(__dirname, '..');
+const { DATA_DIR, TUNNELS_DIR, getTunnelNames, nativeStatus, nativeStop } = require('./runtime');
+const { findCloudflared } = require('./cloudflared-bin');
+try { require('dotenv').config({ path: path.join(DATA_DIR, '.env') }); } catch {}
 
 async function resolveTunnelName() {
   const arg = process.argv[2];
@@ -68,16 +67,9 @@ function execFile(bin, args) {
   }
 }
 
-function getCloudflaredBin() {
-  const localExe = path.join(projectRoot, 'cloudflared.exe');
-  try { execFileSync(localExe, ['--version'], { stdio: 'pipe' }); return localExe; } catch {}
-  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
-  return null;
-}
-
 function getHostnamesFromConfig(name) {
   try {
-    const configPath = path.join(projectRoot, 'tunnels', name, 'config.yml');
+    const configPath = path.join(TUNNELS_DIR, name, 'config.yml');
     if (!fs.existsSync(configPath)) return [];
     const content = fs.readFileSync(configPath, 'utf8');
     const hostnames = [];
@@ -140,9 +132,12 @@ async function main() {
   const tunnelName = await resolveTunnelName();
   console.log(`Deleting tunnel: ${tunnelName}`);
 
-  // Step 1: Stop docker
-  const composeFile = path.join(projectRoot, 'tunnels', tunnelName, 'docker-compose.yml');
-  console.log('[1/5] Stopping Docker container...');
+  // Step 1: Stop the running tunnel, whichever mode it's running in
+  console.log('[1/5] Stopping tunnel...');
+  if (nativeStatus(tunnelName)) {
+    nativeStop(tunnelName);
+  }
+  const composeFile = path.join(TUNNELS_DIR, tunnelName, 'docker-compose.yml');
   if (fs.existsSync(composeFile)) {
     execFile('docker', ['compose', '-p', 'tunnel', '-f', composeFile, 'down']);
   }
@@ -151,7 +146,7 @@ async function main() {
 
   // Step 2: Delete cloudflare tunnel
   console.log('[2/5] Deleting Cloudflare tunnel...');
-  const bin = getCloudflaredBin();
+  const bin = findCloudflared();
   if (bin) {
     const ok = execFile(bin, ['tunnel', 'delete', '-f', tunnelName]);
     if (!ok) console.warn('[WARN] tunnel delete failed, continuing...');
@@ -170,7 +165,7 @@ async function main() {
 
   // Step 4: Delete tunnel folder (includes config, credentials, launchers start.bat/.sh/.command)
   console.log('[4/5] Deleting tunnel folder...');
-  const tunnelsBase = path.resolve(projectRoot, 'tunnels');
+  const tunnelsBase = path.resolve(TUNNELS_DIR);
   const tunnelDir = path.resolve(tunnelsBase, tunnelName);
   if (!tunnelDir.startsWith(tunnelsBase + path.sep)) {
     console.warn('[WARN] Unsafe tunnel path, skipping folder deletion');

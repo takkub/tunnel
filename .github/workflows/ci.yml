@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # No package-lock.json is committed yet (see docs/RELEASE.md), so we
+      # install rather than `npm ci`. Once lockfiles land, switch these to
+      # `npm ci` for reproducible, cached installs.
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install web dependencies
+        run: npm install --prefix web
+
+      - name: Install desktop dependencies
+        if: hashFiles('desktop/package.json') != ''
+        run: npm install --prefix desktop
+
+      - name: Verify
+        run: npm run verify

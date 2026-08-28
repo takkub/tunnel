@@ -2,27 +2,26 @@
 const { execSync, spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+// Namespace import (not destructured) so tests can mock getCloudflaredPath at call time.
+const cloudflaredBin = require('./cloudflared-bin');
 
-const ROOT = path.join(__dirname, '..');
-const TUNNELS_DIR = path.join(ROOT, 'tunnels');
-const CONFIG_FILE = path.join(ROOT, 'runtime.config.json');
+// TUNNEL_ROOT: directory containing scripts/ (defaults to the repo root).
+// TUNNEL_DATA_DIR: directory holding tunnels/, .env, and runtime config
+// (defaults to TUNNEL_ROOT for backward compat). Kept separate so a packaged
+// Electron app can ship code under TUNNEL_ROOT while writing user data
+// (tunnels, credentials, pid/log files) to a writable per-user directory.
+const ROOT = process.env.TUNNEL_ROOT || path.join(__dirname, '..');
+const DATA_DIR = process.env.TUNNEL_DATA_DIR || ROOT;
+const TUNNELS_DIR = path.join(DATA_DIR, 'tunnels');
+const CONFIG_FILE = path.join(DATA_DIR, 'runtime.config.json');
+const RUNTIME_DIR = path.join(DATA_DIR, 'runtime');
+
+function getRuntimeDir(name) {
+  return path.join(RUNTIME_DIR, name);
+}
 
 function getCloudflaredBin() {
-  if (process.platform === 'win32') {
-    const bundled = path.join(ROOT, 'cloudflared.exe');
-    if (fs.existsSync(bundled)) return bundled;
-    return 'cloudflared';
-  }
-  // macOS/Linux — verify PATH
-  try {
-    execSync('cloudflared --version', { stdio: 'pipe' });
-  } catch {
-    const hint = process.platform === 'darwin'
-      ? 'brew install cloudflared'
-      : 'install cloudflared via your package manager (apt/yum/pacman)';
-    throw new Error(`cloudflared not found. Install with: ${hint}`);
-  }
-  return 'cloudflared';
+  return cloudflaredBin.getCloudflaredPath();
 }
 
 // True when this process runs inside a Docker container
@@ -205,7 +204,7 @@ function getCloudflaredProcesses() {
 // Check if a tunnel is running natively — checks .pid first, then falls back to process scan.
 // Pass the result of getCloudflaredProcesses() so we only spawn once per status cycle.
 function nativeRunning(name, processes) {
-  const pidFile = path.join(TUNNELS_DIR, name, '.pid');
+  const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (fs.existsSync(pidFile)) {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
     try { process.kill(pid, 0); return true; } catch {}
@@ -235,7 +234,9 @@ function resolveCredentialsFile(tunnelDir, configPath) {
   return null;
 }
 
-// Native operations
+// Native operations — pid file + log file live under <TUNNEL_DATA_DIR>/runtime/<name>/,
+// separate from the tunnel's config folder so they survive independently of it
+// and stay out of anything that gets synced/packaged from tunnels/.
 function nativeStart(name) {
   const bin = getCloudflaredBin();
   const tunnelDir = path.join(TUNNELS_DIR, name);
@@ -245,8 +246,10 @@ function nativeStart(name) {
   const credPath = resolveCredentialsFile(tunnelDir, configPath);
   if (!credPath) throw new Error(`credentials not found for ${name}`);
 
-  const pidFile = path.join(tunnelDir, '.pid');
-  const logFile = path.join(tunnelDir, '.log');
+  const runDir = getRuntimeDir(name);
+  fs.mkdirSync(runDir, { recursive: true });
+  const pidFile = path.join(runDir, '.pid');
+  const logFile = path.join(runDir, '.log');
 
   const logFd = fs.openSync(logFile, 'a');
   const proc = spawn(bin, [
@@ -255,6 +258,8 @@ function nativeStart(name) {
     '--credentials-file', credPath,
     'run',
   ], {
+    // detached so the tunnel outlives this process; on POSIX this also makes
+    // proc.pid a process-group leader, letting nativeStop kill the whole group.
     detached: true,
     stdio: ['ignore', logFd, logFd],
   });
@@ -265,15 +270,24 @@ function nativeStart(name) {
 }
 
 function nativeStop(name) {
-  const pidFile = path.join(TUNNELS_DIR, name, '.pid');
+  const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (!fs.existsSync(pidFile)) return; // already stopped
   const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-  try { process.kill(pid); } catch {}
-  fs.unlinkSync(pidFile);
+  if (Number.isFinite(pid)) {
+    if (process.platform === 'win32') {
+      // /T kills the whole process tree; cloudflared has no children today,
+      // but this stays correct if that ever changes.
+      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      // Negative pid targets the whole process group (see the `detached` note above).
+      try { process.kill(-pid); } catch { try { process.kill(pid); } catch {} }
+    }
+  }
+  try { fs.unlinkSync(pidFile); } catch {}
 }
 
 function nativeStatus(name) {
-  const pidFile = path.join(TUNNELS_DIR, name, '.pid');
+  const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (!fs.existsSync(pidFile)) return false;
   const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
   try {
@@ -287,6 +301,9 @@ function nativeStatus(name) {
 // Generate per-tunnel start launchers in tunnels/<name>/
 // Launchers run cloudflared FOREGROUND: closing the window/terminal stops the tunnel.
 // nativeStart (used by web dashboard) remains detached as before.
+// Launchers locate their own root via %~dp0/$(dirname), which resolves to
+// TUNNEL_DATA_DIR (tunnels/<name>/../..) regardless of where TUNNEL_ROOT lives —
+// so no env vars need to travel with the launcher file itself.
 function generateLaunchers(name) {
   const tunnelDir = path.join(TUNNELS_DIR, name);
   fs.mkdirSync(tunnelDir, { recursive: true });
@@ -296,10 +313,10 @@ function generateLaunchers(name) {
     ? resolveCredentialsFile(tunnelDir, configPath)
     : null;
 
-  // Relative paths from project root using forward slashes
+  // Relative paths from the data dir using forward slashes
   const relConfig = `tunnels/${name}/config.yml`;
   const relCred = credPath
-    ? credPath.replace(ROOT + path.sep, '').replace(/\\/g, '/')
+    ? credPath.replace(DATA_DIR + path.sep, '').replace(/\\/g, '/')
     : `tunnels/${name}/<credentials>.json`;
 
   // Windows .bat — foreground: close window = tunnel stops immediately
@@ -311,7 +328,9 @@ function generateLaunchers(name) {
     `:: Start tunnel: ${name}  (foreground — close this window to stop the tunnel)`,
     'set "ROOT=%~dp0..\\.."',
     'cd /d "%ROOT%"',
-    'if exist "%ROOT%\\cloudflared.exe" (',
+    'if exist "%ROOT%\\bin\\cloudflared.exe" (',
+    `    "%ROOT%\\bin\\cloudflared.exe" tunnel --config "${relConfigWin}" --credentials-file "${relCredWin}" run`,
+    ') else if exist "%ROOT%\\cloudflared.exe" (',
     `    "%ROOT%\\cloudflared.exe" tunnel --config "${relConfigWin}" --credentials-file "${relCredWin}" run`,
     ') else (',
     `    cloudflared tunnel --config "${relConfigWin}" --credentials-file "${relCredWin}" run`,
@@ -325,7 +344,11 @@ function generateLaunchers(name) {
     `# Start tunnel: ${name}  (foreground — Ctrl-C or close terminal to stop)`,
     'ROOT="$(cd "$(dirname "$0")/../.." && pwd)"',
     'cd "$ROOT"',
-    `exec cloudflared tunnel --config "${relConfig}" --credentials-file "${relCred}" run`,
+    'if [ -x "$ROOT/bin/cloudflared" ]; then',
+    `  exec "$ROOT/bin/cloudflared" tunnel --config "${relConfig}" --credentials-file "${relCred}" run`,
+    'else',
+    `  exec cloudflared tunnel --config "${relConfig}" --credentials-file "${relCred}" run`,
+    'fi',
   ];
   const sh = shLines.join('\n') + '\n';
 
@@ -357,8 +380,11 @@ function getDockerTunnelNames() {
 
 module.exports = {
   ROOT,
+  DATA_DIR,
   TUNNELS_DIR,
   CONFIG_FILE,
+  RUNTIME_DIR,
+  getRuntimeDir,
   getCloudflaredBin,
   isInContainer,
   getHostProjectDir,

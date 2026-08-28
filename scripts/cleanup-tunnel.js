@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const ui = require('./ui-helper');
+const { ROOT, TUNNELS_DIR } = require('./runtime');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -16,7 +17,7 @@ function question(query) {
 
 const errors = [];
 const success = [];
-const projectRoot = path.join(__dirname, '..');
+const projectRoot = ROOT;
 
 // ฟังก์ชันช่วยเหลือ
 function exec(command, silent = true) {
@@ -35,7 +36,7 @@ function exec(command, silent = true) {
 // รวบรวมรายการ tunnels จาก cloudflared และ config เพื่อให้เลือกได้
 function collectTunnelChoices() {
   const choices = [];
-  const tunnelsDir = path.join(projectRoot, 'tunnels');
+  const tunnelsDir = TUNNELS_DIR;
 
   // อ่านจาก cloudflared tunnel list
   try {
@@ -267,7 +268,7 @@ async function main() {
 
     // ถ้าไม่เจอจาก list ลองหาจากไฟล์
     if (!tunnelId) {
-      const tunnelFolder = path.join(projectRoot, 'tunnels', tunnelName);
+      const tunnelFolder = path.join(TUNNELS_DIR, tunnelName);
       if (fs.existsSync(tunnelFolder)) {
         const jsonFiles = fs.readdirSync(tunnelFolder)
           .filter(f => f.endsWith('.json') && f.match(/[a-f0-9-]{36}\.json/));
@@ -292,7 +293,7 @@ async function main() {
   const domainsToDelete = [];
 
   // หา domain จาก config.yml ก่อน (เพื่อให้ลบ CNAME ได้แม้ไม่มี DNS routes)
-  const configPath = path.join(projectRoot, 'tunnels', tunnelName, 'config.yml');
+  const configPath = path.join(TUNNELS_DIR, tunnelName, 'config.yml');
   if (fs.existsSync(configPath)) {
     try {
       const configContent = fs.readFileSync(configPath, 'utf8');
@@ -456,7 +457,7 @@ async function main() {
   ui.step(5, 5, `${ui.icons.trash} Removing Local Files...`);
 
   // ลบ config folder
-  const configFolder = path.join(projectRoot, 'tunnels', tunnelName);
+  const configFolder = path.join(TUNNELS_DIR, tunnelName);
   safeDelete(configFolder, `config folder (tunnels/${tunnelName}/)`);
 
   // ลบ docker-compose file

@@ -1,13 +1,12 @@
-const { execSync, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const ui = require('./ui-helper');
+const { TUNNELS_DIR } = require('./runtime');
+const { findCloudflared } = require('./cloudflared-bin');
 
 function getCloudflaredBin() {
-  const localExe = path.join(__dirname, '..', 'cloudflared.exe');
-  if (fs.existsSync(localExe)) return localExe;
-  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
-  return 'cloudflared';
+  return findCloudflared() || 'cloudflared';
 }
 
 ui.header('DNS Configuration', 'Check tunnel DNS settings');
@@ -16,7 +15,7 @@ const tunnelName = process.argv[2];
 
 // When no arg: scan tunnels/ dir and print CNAME for each
 if (!tunnelName) {
-  const tunnelsDir = path.join(__dirname, '..', 'tunnels');
+  const tunnelsDir = TUNNELS_DIR;
   const entries = fs.existsSync(tunnelsDir)
     ? fs.readdirSync(tunnelsDir).filter(d => fs.existsSync(path.join(tunnelsDir, d, 'config.yml')))
     : [];

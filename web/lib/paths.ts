@@ -9,3 +9,4 @@ const devRoot = path.resolve(process.cwd(), '..')
 
 export const TUNNEL_ROOT = process.env.TUNNEL_ROOT || devRoot
 export const TUNNEL_DATA_DIR = process.env.TUNNEL_DATA_DIR || devRoot
+export const TUNNELS_DIR = path.join(TUNNEL_DATA_DIR, 'tunnels')

@@ -12,6 +12,7 @@
     "test": "node --test scripts/__tests__/*.test.js",
     "verify": "npm --prefix web run typecheck && npm test",
     "check": "node scripts/check-requirements.js",
+    "release": "node scripts/release.js",
     "login": "node scripts/login.js",
     "setup": "node scripts/setup-tunnel.js",
     "status": "node scripts/status.js",
