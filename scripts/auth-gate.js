@@ -1,0 +1,443 @@
+// Per-tunnel login gate: rewrites a tunnel's ingress to route through a shared
+// nginx + login-service pair (nginx/auth-gate/) instead of the app directly.
+// nginx does auth_request against auth-gate-server.js (cookie-based session),
+// redirecting unauthenticated visitors to a login page served by that same service.
+'use strict';
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const {
+  ROOT,
+  TUNNELS_DIR,
+  CONFIG_FILE,
+  isInContainer,
+  getHostProjectDir,
+  dockerStatus,
+  dockerStop,
+  dockerStart,
+  nativeStatus,
+  nativeStop,
+  nativeStart,
+} = require('./runtime');
+const { hashPassword, ensureSecretFile } = require('./auth-gate-crypto');
+
+const NGINX_AUTH_GATE_DIR = path.join(ROOT, 'nginx', 'auth-gate');
+const CONFD_DIR = path.join(NGINX_AUTH_GATE_DIR, 'conf.d');
+const COMPOSE_FILE = path.join(NGINX_AUTH_GATE_DIR, 'docker-compose.yml');
+const SECRET_FILE = path.join(NGINX_AUTH_GATE_DIR, '.secret');
+
+const GATE_CONTAINER = 'tunnel-auth-gate';
+const GATE_SERVER_CONTAINER = 'tunnel-auth-gate-server';
+const DEFAULT_GATE_PORT = 8890;
+const DEFAULT_GATE_SVC_PORT = 8891;
+
+const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+
+function assertValidName(name) {
+  if (!name || !NAME_RE.test(name)) throw new Error('Invalid tunnel name');
+}
+
+function getConfigPath(name) {
+  return path.join(TUNNELS_DIR, name, 'config.yml');
+}
+
+function getStatePath(name) {
+  return path.join(TUNNELS_DIR, name, 'auth-gate.json');
+}
+
+function readState(name) {
+  const p = getStatePath(name);
+  const empty = { enabled: false, passwordHash: null, originalService: null, gatePort: null };
+  if (!fs.existsSync(p)) return empty;
+  try {
+    return { ...empty, ...JSON.parse(fs.readFileSync(p, 'utf8')) };
+  } catch {
+    return empty;
+  }
+}
+
+function writeState(name, state) {
+  fs.mkdirSync(path.dirname(getStatePath(name)), { recursive: true });
+  fs.writeFileSync(getStatePath(name), JSON.stringify(state, null, 2));
+}
+
+function getHostnameFromConfig(name) {
+  const configPath = getConfigPath(name);
+  if (!fs.existsSync(configPath)) return null;
+  const content = fs.readFileSync(configPath, 'utf8');
+  const match = content.match(/hostname:\s*(\S+)/);
+  return match ? match[1] : null;
+}
+
+function getGatePort() {
+  if (process.env.AUTH_GATE_PORT) return parseInt(process.env.AUTH_GATE_PORT, 10);
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (cfg.authGatePort) return parseInt(cfg.authGatePort, 10);
+    }
+  } catch {}
+  return DEFAULT_GATE_PORT;
+}
+
+function getGateServicePort() {
+  if (process.env.AUTH_GATE_SVC_PORT) return parseInt(process.env.AUTH_GATE_SVC_PORT, 10);
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (cfg.authGateServicePort) return parseInt(cfg.authGateServicePort, 10);
+    }
+  } catch {}
+  return DEFAULT_GATE_SVC_PORT;
+}
+
+// Finds the ingress entry for `hostname` and swaps its `service:` line for `newService`.
+// Returns the rewritten text plus the service value that was there before.
+function rewriteServiceForHostname(configText, hostname, newService) {
+  const lines = configText.split(/\r?\n/);
+  let inTargetEntry = false;
+  let originalService = null;
+  let found = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const hostMatch = line.match(/^\s*-\s*hostname:\s*(\S+)\s*$/);
+    if (hostMatch) {
+      inTargetEntry = hostMatch[1] === hostname;
+      continue;
+    }
+    const newListEntry = line.match(/^\s*-\s*\S+:/);
+    if (newListEntry) {
+      inTargetEntry = false;
+      continue;
+    }
+    if (inTargetEntry) {
+      const svcMatch = line.match(/^(\s*)service:\s*(\S+)\s*$/);
+      if (svcMatch) {
+        originalService = svcMatch[2];
+        lines[i] = `${svcMatch[1]}service: ${newService}`;
+        found = true;
+        inTargetEntry = false;
+      }
+    }
+  }
+
+  if (!found) throw new Error(`hostname '${hostname}' not found in ingress config`);
+  return { text: lines.join('\n'), originalService };
+}
+
+function ensureUpgradeMapFile() {
+  const p = path.join(CONFD_DIR, '_upgrade-map.conf');
+  if (fs.existsSync(p)) return;
+  fs.writeFileSync(p, `map $http_upgrade $connection_upgrade {\n    default upgrade;\n    ''      close;\n}\n`);
+}
+
+// Without at least one `server { listen 80; }` block, nginx has nothing bound to the
+// port at all once the last protected tunnel is disabled — connections get refused
+// instead of a clean response. This default_server keeps a listener alive always,
+// and closes anything that doesn't match a known tunnel's server_name.
+function ensureDefaultServerFile() {
+  const p = path.join(CONFD_DIR, '_default.conf');
+  if (fs.existsSync(p)) return;
+  fs.writeFileSync(p, `server {\n    listen 80 default_server;\n    server_name _;\n    return 444;\n}\n`);
+}
+
+function writeGateConfig(name, hostname, originalService) {
+  fs.mkdirSync(CONFD_DIR, { recursive: true });
+  const svcPort = getGateServicePort();
+  const conf = `server {
+    listen 80;
+    server_name ${hostname};
+
+    location / {
+        auth_request /__gate/verify;
+        error_page 401 = @login;
+
+        proxy_pass ${originalService};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+
+    location = /__gate/verify {
+        internal;
+        proxy_pass http://host.docker.internal:${svcPort}/verify;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Gate-Tunnel ${name};
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    location /__gate/ {
+        proxy_pass http://host.docker.internal:${svcPort}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Gate-Tunnel ${name};
+    }
+
+    location @login {
+        return 302 /__gate/login?next=$request_uri;
+    }
+}
+`;
+  fs.writeFileSync(path.join(CONFD_DIR, `${name}.conf`), conf);
+  ensureUpgradeMapFile();
+  ensureDefaultServerFile();
+}
+
+function removeGateConfig(name) {
+  const p = path.join(CONFD_DIR, `${name}.conf`);
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+}
+
+function writeComposeFile() {
+  fs.mkdirSync(NGINX_AUTH_GATE_DIR, { recursive: true });
+  const compose = `services:
+  ${GATE_CONTAINER}:
+    image: nginx:alpine
+    container_name: ${GATE_CONTAINER}
+    restart: unless-stopped
+    ports:
+      - "\${AUTH_GATE_PORT:-${DEFAULT_GATE_PORT}}:80"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ${GATE_SERVER_CONTAINER}:
+    image: node:alpine
+    container_name: ${GATE_SERVER_CONTAINER}
+    restart: unless-stopped
+    command: node /app/scripts/auth-gate-server.js
+    working_dir: /app
+    environment:
+      PORT: \${AUTH_GATE_SVC_PORT:-${DEFAULT_GATE_SVC_PORT}}
+    ports:
+      - "\${AUTH_GATE_SVC_PORT:-${DEFAULT_GATE_SVC_PORT}}:\${AUTH_GATE_SVC_PORT:-${DEFAULT_GATE_SVC_PORT}}"
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ../../tunnels:/app/tunnels:ro
+      - ../../nginx:/app/nginx:ro
+`;
+  fs.writeFileSync(COMPOSE_FILE, compose);
+}
+
+function isGateRunning() {
+  try {
+    const out = execSync('docker ps --format "{{.Names}}"', { encoding: 'utf8', stdio: 'pipe' });
+    const names = out.split('\n').map(l => l.trim());
+    return names.includes(GATE_CONTAINER) && names.includes(GATE_SERVER_CONTAINER);
+  } catch {
+    return false;
+  }
+}
+
+function ensureGateRunningInContainer() {
+  const hostDir = getHostProjectDir() + '/nginx/auth-gate';
+  const hostScriptsDir = getHostProjectDir() + '/scripts';
+  const hostTunnelsDir = getHostProjectDir() + '/tunnels';
+  const hostNginxDir = getHostProjectDir() + '/nginx';
+  const port = getGatePort();
+  const svcPort = getGateServicePort();
+
+  try { execSync(`docker rm -f "${GATE_CONTAINER}"`, { stdio: 'pipe' }); } catch {}
+  execSync(
+    `docker run -d` +
+    ` --name "${GATE_CONTAINER}"` +
+    ` --restart unless-stopped` +
+    ` --label com.docker.compose.project=tunnel` +
+    ` --label "com.docker.compose.service=${GATE_CONTAINER}"` +
+    ` --label com.docker.compose.container-number=1` +
+    ` -p ${port}:80` +
+    ` -v "${hostDir}/conf.d:/etc/nginx/conf.d:ro"` +
+    ` --add-host host.docker.internal:host-gateway` +
+    ` nginx:alpine`,
+    { encoding: 'utf8', stdio: 'pipe' }
+  );
+
+  try { execSync(`docker rm -f "${GATE_SERVER_CONTAINER}"`, { stdio: 'pipe' }); } catch {}
+  execSync(
+    `docker run -d` +
+    ` --name "${GATE_SERVER_CONTAINER}"` +
+    ` --restart unless-stopped` +
+    ` --label com.docker.compose.project=tunnel` +
+    ` --label "com.docker.compose.service=${GATE_SERVER_CONTAINER}"` +
+    ` --label com.docker.compose.container-number=1` +
+    ` -e PORT=${svcPort}` +
+    ` -p ${svcPort}:${svcPort}` +
+    ` -v "${hostScriptsDir}:/app/scripts:ro"` +
+    ` -v "${hostTunnelsDir}:/app/tunnels:ro"` +
+    ` -v "${hostNginxDir}:/app/nginx:ro"` +
+    ` -w /app` +
+    ` node:alpine` +
+    ` node /app/scripts/auth-gate-server.js`,
+    { encoding: 'utf8', stdio: 'pipe' }
+  );
+}
+
+function ensureGateRunningHost() {
+  const env = { ...process.env, AUTH_GATE_PORT: String(getGatePort()), AUTH_GATE_SVC_PORT: String(getGateServicePort()) };
+  try {
+    execSync(`docker compose -p tunnel -f "${COMPOSE_FILE}" up -d`, { cwd: NGINX_AUTH_GATE_DIR, encoding: 'utf8', stdio: 'pipe', env });
+  } catch {
+    try { execSync(`docker rm -f "${GATE_CONTAINER}" "${GATE_SERVER_CONTAINER}"`, { stdio: 'pipe' }); } catch {}
+    execSync(`docker compose -p tunnel -f "${COMPOSE_FILE}" up -d`, { cwd: NGINX_AUTH_GATE_DIR, encoding: 'utf8', stdio: 'pipe', env });
+  }
+}
+
+function ensureGateRunning() {
+  fs.mkdirSync(CONFD_DIR, { recursive: true });
+  ensureUpgradeMapFile();
+  ensureDefaultServerFile();
+  ensureSecretFile(SECRET_FILE);
+  writeComposeFile();
+  if (isGateRunning()) return;
+  if (isInContainer()) ensureGateRunningInContainer();
+  else ensureGateRunningHost();
+}
+
+function reloadGate() {
+  try {
+    execSync(`docker exec ${GATE_CONTAINER} nginx -s reload`, { stdio: 'pipe' });
+  } catch {
+    try { execSync(`docker restart ${GATE_CONTAINER}`, { stdio: 'pipe' }); } catch {}
+  }
+}
+
+// Best-effort: config.yml and gate state are already persisted by the time this runs,
+// so a hiccup restarting the live tunnel process shouldn't fail the whole enable/disable —
+// the new ingress takes effect on whatever next restarts the tunnel.
+function restartTunnelIfRunning(name) {
+  try {
+    if (dockerStatus(name)) {
+      dockerStop(name);
+      dockerStart(name);
+      return;
+    }
+    if (nativeStatus(name)) {
+      nativeStop(name);
+      nativeStart(name);
+    }
+  } catch (e) {
+    process.stderr.write(`Warning: failed to restart tunnel '${name}': ${e.message}\n`);
+  }
+}
+
+function enable(name, password, opts) {
+  opts = opts || {};
+  assertValidName(name);
+  if (!password) throw new Error('password required');
+  const configPath = getConfigPath(name);
+  if (!fs.existsSync(configPath)) throw new Error(`No config.yml for tunnel: ${name}`);
+  const hostname = getHostnameFromConfig(name);
+  if (!hostname) throw new Error(`No hostname found in config for tunnel: ${name}`);
+
+  const state = readState(name);
+  const gatePort = state.gatePort || getGatePort();
+
+  if (!state.enabled) {
+    const configText = fs.readFileSync(configPath, 'utf8');
+    const { text, originalService } = rewriteServiceForHostname(configText, hostname, `http://host.docker.internal:${gatePort}`);
+    fs.writeFileSync(configPath, text);
+    state.originalService = originalService;
+  }
+
+  state.enabled = true;
+  state.passwordHash = hashPassword(password);
+  state.gatePort = gatePort;
+  delete state.username; // legacy field from the basic-auth design — no longer used
+  writeState(name, state);
+
+  writeGateConfig(name, hostname, state.originalService);
+
+  if (!opts.skipDocker) {
+    ensureGateRunning();
+    reloadGate();
+  }
+  if (!opts.skipTunnelRestart) restartTunnelIfRunning(name);
+
+  return status(name);
+}
+
+function disable(name, opts) {
+  opts = opts || {};
+  assertValidName(name);
+  const state = readState(name);
+  if (!state.enabled) return status(name);
+
+  const configPath = getConfigPath(name);
+  const hostname = getHostnameFromConfig(name);
+  if (hostname && fs.existsSync(configPath) && state.originalService) {
+    const configText = fs.readFileSync(configPath, 'utf8');
+    const { text } = rewriteServiceForHostname(configText, hostname, state.originalService);
+    fs.writeFileSync(configPath, text);
+  }
+
+  removeGateConfig(name);
+  const p = getStatePath(name);
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+
+  if (!opts.skipDocker) reloadGate();
+  if (!opts.skipTunnelRestart) restartTunnelIfRunning(name);
+
+  return status(name);
+}
+
+function changePassword(name, password, opts) {
+  opts = opts || {};
+  assertValidName(name);
+  if (!password) throw new Error('password required');
+  const state = readState(name);
+  if (!state.enabled) throw new Error(`Auth gate not enabled for ${name}`);
+
+  state.passwordHash = hashPassword(password);
+  writeState(name, state);
+
+  if (!opts.skipDocker) {
+    ensureGateRunning();
+    // cookie value is only ever verified by the running gate service, which reads
+    // auth-gate.json fresh per request — no reload needed for a password change.
+  }
+
+  return status(name);
+}
+
+function status(name) {
+  const state = readState(name);
+  return { enabled: !!state.enabled, gatePort: state.enabled ? state.gatePort : null };
+}
+
+module.exports = {
+  enable,
+  disable,
+  changePassword,
+  status,
+  readState,
+  rewriteServiceForHostname,
+  getGatePort,
+  getGateServicePort,
+};
+
+if (require.main === module) {
+  const [action, name, password] = process.argv.slice(2);
+  try {
+    let result;
+    if (action === 'enable') result = enable(name, password);
+    else if (action === 'disable') result = disable(name);
+    else if (action === 'change-password') result = changePassword(name, password);
+    else if (action === 'status') result = status(name);
+    else {
+      process.stderr.write('Usage: node auth-gate.js <enable|disable|change-password|status> <tunnelName> [password]\n');
+      process.exit(1);
+    }
+    process.stdout.write(JSON.stringify(result) + '\n');
+  } catch (e) {
+    process.stderr.write((e instanceof Error ? e.message : String(e)) + '\n');
+    process.exit(1);
+  }
+}

@@ -109,6 +109,12 @@ nginx/edge-snippet.conf
 nginx/conf.d/*.conf
 !nginx/conf.d/.gitkeep
 
+# Auth gate: generated per-tunnel configs, generated compose file, and the session secret
+nginx/auth-gate/conf.d/*.conf
+!nginx/auth-gate/conf.d/.gitkeep
+nginx/auth-gate/docker-compose.yml
+nginx/auth-gate/.secret
+
 # QA / dev artifacts
 web/screenshots/
 .playwright-mcp/
@@ -122,8 +128,8 @@ web/tsconfig.tsbuildinfo
 web-verify.err
 
 # Runtime state
-runtime/
-tunnels/
+/runtime/
+/tunnels/
 
 # Tooling
 .claude/

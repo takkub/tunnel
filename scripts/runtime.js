@@ -30,17 +30,18 @@ function isInContainer() {
   return fs.existsSync('/.dockerenv');
 }
 
-// Resolve where the tunnels/ directory lives on the Docker HOST.
-// Needed when dockerStart runs inside the web container: compose volumes with relative paths
-// are resolved against the HOST filesystem, not the container filesystem.
-let _hostTunnelsDir = null;
-function getHostTunnelsDir() {
-  if (_hostTunnelsDir) return _hostTunnelsDir;
+// Resolve the project root directory as it exists on the Docker HOST (not inside
+// this container). Needed when a script running inside the web container spawns
+// sibling containers via the Docker socket: compose volumes with relative paths
+// ("./tunnels") are resolved by the HOST daemon against the HOST filesystem.
+let _hostProjectDir = null;
+function getHostProjectDir() {
+  if (_hostProjectDir) return _hostProjectDir;
 
   // 1. Explicit override (set via docker-compose-web.yml environment)
   if (process.env.HOST_PROJECT_DIR) {
-    _hostTunnelsDir = process.env.HOST_PROJECT_DIR.replace(/\\/g, '/').replace(/\/$/, '') + '/tunnels';
-    return _hostTunnelsDir;
+    _hostProjectDir = process.env.HOST_PROJECT_DIR.replace(/\\/g, '/').replace(/\/$/, '');
+    return _hostProjectDir;
   }
 
   // 2. Auto-detect: inspect our own container via container ID from cgroup
@@ -54,16 +55,16 @@ function getHostTunnelsDir() {
         { encoding: 'utf8', stdio: 'pipe' }
       ).trim();
       if (raw) {
-        _hostTunnelsDir = raw.replace(/\\/g, '/').replace(/\/$/, '') + '/tunnels';
-        return _hostTunnelsDir;
+        _hostProjectDir = raw.replace(/\\/g, '/').replace(/\/$/, '');
+        return _hostProjectDir;
       }
       // Also try .Mounts fallback
       const mraw = execSync(`docker inspect "${shortId}" --format "{{json .Mounts}}"`, { encoding: 'utf8', stdio: 'pipe' }).trim();
       const mounts = JSON.parse(mraw);
       const mount = mounts.find(mt => mt.Destination === '/app/tunnels' && mt.Type === 'bind');
       if (mount && mount.Source) {
-        _hostTunnelsDir = mount.Source.replace(/\\/g, '/').replace(/\/$/, '');
-        return _hostTunnelsDir;
+        _hostProjectDir = mount.Source.replace(/\\/g, '/').replace(/\/$/, '').replace(/\/tunnels$/, '');
+        return _hostProjectDir;
       }
     }
   } catch {}
@@ -71,6 +72,10 @@ function getHostTunnelsDir() {
   throw new Error(
     'Cannot resolve host project dir. Set HOST_PROJECT_DIR env var in docker-compose-web.yml.'
   );
+}
+
+function getHostTunnelsDir() {
+  return getHostProjectDir() + '/tunnels';
 }
 
 function isDockerAvailable() {
@@ -355,6 +360,9 @@ module.exports = {
   TUNNELS_DIR,
   CONFIG_FILE,
   getCloudflaredBin,
+  isInContainer,
+  getHostProjectDir,
+  getHostTunnelsDir,
   isDockerAvailable,
   getRuntimeMode,
   getEffectiveMode,

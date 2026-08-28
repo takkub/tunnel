@@ -133,6 +133,17 @@ Switch mode in the web UI under **Settings → Runtime Mode**, or edit `runtime.
 
 Native mode stores PIDs at `tunnels/<name>/.pid` and logs at `tunnels/<name>/.log`.
 
+## Per-Tunnel Password Gate
+
+Any tunnel can be put behind a password login page without changing the app itself.
+Enabling it swaps that tunnel's ingress `service:` to a small nginx + login-service pair
+(`nginx/auth-gate/`, containers `tunnel-auth-gate` on :8890 and `tunnel-auth-gate-server`
+on :8891) which shows a login page, sets a signed session cookie on success, and proxies
+through to the real app afterward. Toggle it from the tunnel's card in the web UI, or via
+API: `GET/PUT /api/tunnels/<name>/auth-gate` (`PUT` body: `{ enabled, password? }`).
+
+Passwords are hashed (scrypt) — never stored or logged in plaintext.
+
 ## Available Tunnels
 
 Tunnel configs live in `tunnels/<name>/config.yml`. Docker compose files are at `docker-compose-cloudflare-<name>.yml`.
