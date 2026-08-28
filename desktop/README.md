@@ -34,3 +34,10 @@ With `DESKTOP_MODE=1` and no `ADMIN_PASSWORD` set, the web login is skipped
 Windows and macOS builds are unsigned for now. **TODO:** notarize the macOS
 build and sign the Windows build before a public release — unsigned installers
 will trigger SmartScreen / Gatekeeper warnings.
+
+`electron-builder` is pinned to `24.6.3` (not `^24.13.x`): newer versions bundle
+a `7zip-bin` whose 7-Zip tries to preserve symlinks when extracting the
+`winCodeSign` toolset, which fails on Windows without admin rights or Developer
+Mode (`Cannot create symbolic link : A required privilege is not held by the
+client`). Unpin once upstream fixes electron-userland/electron-builder#8149,
+or if building as admin / with Developer Mode on.

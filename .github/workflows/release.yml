@@ -47,10 +47,10 @@ jobs:
         with:
           name: desktop-${{ matrix.os }}
           path: |
-            desktop/dist/*.exe
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/latest*.yml
+            desktop/dist-artifacts/*.exe
+            desktop/dist-artifacts/*.dmg
+            desktop/dist-artifacts/*.zip
+            desktop/dist-artifacts/latest*.yml
           if-no-files-found: warn
           retention-days: 30
 
@@ -62,8 +62,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            desktop/dist/*.exe
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/latest*.yml
+            desktop/dist-artifacts/*.exe
+            desktop/dist-artifacts/*.dmg
+            desktop/dist-artifacts/*.zip
+            desktop/dist-artifacts/latest*.yml
           fail_on_unmatched_files: false

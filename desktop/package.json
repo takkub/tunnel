@@ -54,7 +54,7 @@
     "@types/node": "^20",
     "cross-env": "^7.0.3",
     "electron": "^31.7.7",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "24.6.3",
     "typescript": "^5.5.3"
   }
 }
