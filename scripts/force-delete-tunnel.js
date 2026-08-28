@@ -2,6 +2,7 @@ const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const ui = require('./ui-helper');
+const { ROOT, TUNNELS_DIR } = require('./runtime');
 
 function exec(command, silent = false) {
   try {
@@ -63,7 +64,7 @@ async function main() {
   }
 
   const cmd = getCloudflaredCommand();
-  const projectRoot = path.join(__dirname, '..');
+  const projectRoot = ROOT;
 
   // [1/5] หยุด Docker containers
   ui.step(1, 5, `${ui.icons.docker} Stopping Docker containers...`);
@@ -111,7 +112,7 @@ async function main() {
 
   // ถ้าหาไม่เจอจาก list ลองหาจากไฟล์
   if (!tunnelId) {
-    const tunnelFolder = path.join(projectRoot, 'tunnels', tunnelName);
+    const tunnelFolder = path.join(TUNNELS_DIR, tunnelName);
     if (fs.existsSync(tunnelFolder)) {
       const jsonFiles = fs.readdirSync(tunnelFolder)
         .filter(f => f.endsWith('.json') && f.match(/[a-f0-9-]{36}\.json/));
@@ -192,7 +193,7 @@ async function main() {
   // [5/5] ลบ local files
   ui.step(5, 5, `${ui.icons.trash} Cleaning up local files...`);
 
-  const configFolder = path.join(projectRoot, 'tunnels', tunnelName);
+  const configFolder = path.join(TUNNELS_DIR, tunnelName);
   if (fs.existsSync(configFolder)) {
     try {
       fs.rmSync(configFolder, { recursive: true, force: true });

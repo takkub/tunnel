@@ -2,8 +2,9 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-const ROOT = path.resolve(process.cwd(), '..')
-const CONFIG_FILE = path.join(ROOT, 'runtime.config.json')
+const ROOT = process.env.TUNNEL_ROOT || path.resolve(process.cwd(), '..')
+const DATA_DIR = process.env.TUNNEL_DATA_DIR || ROOT
+const CONFIG_FILE = path.join(DATA_DIR, 'runtime.config.json')
 
 export function isDockerAvailable(): boolean {
   try {

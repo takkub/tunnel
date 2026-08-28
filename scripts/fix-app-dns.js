@@ -1,16 +1,9 @@
 try { require('dotenv').config(); } catch {}
-const { execSync, execFileSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const { execFileSync } = require('child_process');
 const ui = require('./ui-helper');
+const { findCloudflared } = require('./cloudflared-bin');
 
-function getCloudflaredBin() {
-  const localExe = path.join(__dirname, '..', 'cloudflared.exe');
-  if (fs.existsSync(localExe)) return localExe;
-  try { execFileSync('cloudflared', ['--version'], { stdio: 'pipe' }); return 'cloudflared'; } catch {}
-  return 'cloudflared';
-}
-const BIN = getCloudflaredBin();
+const BIN = findCloudflared() || 'cloudflared';
 
 ui.header('DNS Fix', 'Fix DNS for your domain');
 

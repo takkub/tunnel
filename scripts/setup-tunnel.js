@@ -1,9 +1,11 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const ui = require('./ui-helper');
 const readline = require('readline');
-const { generateLaunchers } = require('./runtime');
+const { TUNNELS_DIR, getEffectiveMode, generateLaunchers, nativeStart, getRuntimeDir } = require('./runtime');
+const { findCloudflared, ensureCloudflared } = require('./cloudflared-bin');
 
 if (process.env.CI === '1' || !process.stdin.isTTY) {
   console.error('interactive mode required, run from terminal');
@@ -28,25 +30,23 @@ function question(query) {
   });
 }
 
-function checkCloudflared() {
-  try {
-    execSync('cloudflared --version', { stdio: 'pipe' });
-    return true;
-  } catch (error) {
-    return false;
+// Resolve how to run cloudflared commands for this setup run: a real binary
+// (downloading it if needed) for native mode, or a `docker run` wrapper when
+// the effective mode is 'docker'. Returns a quoted command prefix usable in
+// shell strings, e.g. `"C:\...\cloudflared.exe"` or `docker run --rm ...`.
+async function resolveCloudflaredCommand(mode) {
+  if (mode === 'docker') {
+    const cloudflaredDir = path.join(os.homedir(), '.cloudflared');
+    return `docker run --rm -v "${TUNNELS_DIR.replace(/\\/g, '/')}:/etc/cloudflared" -v "${cloudflaredDir.replace(/\\/g, '/')}:/root/.cloudflared" cloudflare/cloudflared:latest`;
   }
-}
-
-// ตรวจสอบว่ามี cloudflared ติดตั้งหรือไม่ ถ้าไม่ใช้ Docker แทน
-function getCloudflaredCommand() {
-  try {
-    execSync('cloudflared --version', { stdio: 'pipe' });
-    return 'cloudflared';
-  } catch (error) {
-    // ใช้ Docker แทน
-    const projectRoot = path.join(__dirname, '..');
-    return `docker run --rm -v "${projectRoot}/tunnels:/etc/cloudflared" -v "${process.env.USERPROFILE}/.cloudflared:/root/.cloudflared" cloudflare/cloudflared:latest`;
+  let bin = findCloudflared();
+  if (!bin) {
+    ui.info('cloudflared not found — downloading the latest release...');
+    bin = await ensureCloudflared();
+    ui.success('cloudflared downloaded');
+    console.log('');
   }
+  return `"${bin}"`;
 }
 
 function exec(command, description, returnOutput = false) {
@@ -70,13 +70,9 @@ function exec(command, description, returnOutput = false) {
 async function main() {
   ui.header('Cloudflare Tunnel', 'Setup Wizard');
 
-  // Check if cloudflared is installed
-  const hasCloudflared = checkCloudflared();
-  if (!hasCloudflared) {
-    ui.warning('cloudflared is not installed locally.');
-    ui.info('This script will use Docker to run cloudflared commands.');
-    console.log('');
-  }
+  const mode = getEffectiveMode(); // 'docker' | 'native' — same setting the web dashboard uses
+  ui.info(`Runtime mode: ${ui.c.cyan}${mode}${ui.c.reset}`);
+  console.log('');
 
   // Step 1: Tunnel Name (simple name, will auto-append -tunnel)
   ui.section('Configuration');
@@ -110,10 +106,6 @@ async function main() {
   // Auto-set folder name based on tunnel name
   const folderName = tunnelName;
 
-  // Auto-select Docker platform
-  const isWindows = false;
-  const platformName = 'Docker';
-
   console.log('');
   ui.info(`Folder name: ${ui.c.cyan}${folderName}${ui.c.reset}`);
 
@@ -123,7 +115,7 @@ async function main() {
     ['Domain', domain],
     ['Local Port', localPort],
     ['Config Folder', `tunnels/${folderName}`],
-    ['Platform', platformName]
+    ['Runtime Mode', mode === 'docker' ? 'Docker' : 'Native']
   ]);
 
   console.log('');
@@ -136,7 +128,7 @@ async function main() {
 
   // Create tunnel
   ui.step(1, 7, `${ui.icons.cloud} Creating Cloudflare Tunnel...`);
-  const cmd = getCloudflaredCommand();
+  const cmd = await resolveCloudflaredCommand(mode);
   const createOutput = exec(`${cmd} tunnel create ${tunnelName}`, 'Create tunnel', true);
   if (!createOutput) {
     ui.error('Failed to create tunnel');
@@ -171,8 +163,7 @@ async function main() {
 
   // Create folder
   ui.step(2, 7, `${ui.icons.folder} Creating config folder...`);
-  const projectRoot = path.join(__dirname, '..');
-  const configDir = path.join(projectRoot, 'tunnels', folderName);
+  const configDir = path.join(TUNNELS_DIR, folderName);
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
   }
@@ -180,7 +171,7 @@ async function main() {
 
   // Copy credentials
   ui.step(3, 7, `${ui.icons.lock} Copying credentials...`);
-  const cloudflaredHome = path.join(process.env.USERPROFILE, '.cloudflared');
+  const cloudflaredHome = path.join(os.homedir(), '.cloudflared');
   const credentialFile = `${tunnelId}.json`;
   const credentialPath = path.join(cloudflaredHome, credentialFile);
 
@@ -229,15 +220,12 @@ async function main() {
   // Create config.yml
   ui.step(5, 7, `${ui.icons.settings} Creating config.yml...`);
 
-  let credentialsPathConfig = `/etc/cloudflared/${tunnelId}.json`;
-  let serviceUrl = `http://host.docker.internal:${localPort}`;
-
-  if (isWindows) {
-    // For Windows, use absolute path (double backslashes for YAML string)
-    const absJsonPath = path.join(configDir, `${tunnelId}.json`).replace(/\\/g, '/');
-    credentialsPathConfig = absJsonPath;
-    serviceUrl = `http://localhost:${localPort}`;
-  }
+  const credentialsPathConfig = mode === 'docker'
+    ? `/etc/cloudflared/${tunnelId}.json`
+    : path.join(configDir, `${tunnelId}.json`).replace(/\\/g, '/');
+  const serviceUrl = mode === 'docker'
+    ? `http://host.docker.internal:${localPort}`
+    : `http://localhost:${localPort}`;
 
   const configContent = `tunnel: ${tunnelId}
 credentials-file: ${credentialsPathConfig}
@@ -252,7 +240,7 @@ ingress:
 `;
   fs.writeFileSync(path.join(configDir, 'config.yml'), configContent);
   ui.subStep('Created: config.yml', 'success');
-  console.log(`   ${ui.c.dim}Platform: ${platformName}${ui.c.reset}`);
+  console.log(`   ${ui.c.dim}Runtime mode: ${mode}${ui.c.reset}`);
 
   // Setup DNS
   ui.step(6, 7, `${ui.icons.dns} Setting up DNS...`);
@@ -268,7 +256,7 @@ ingress:
   // Generate Run Script / Docker Compose
   ui.step(7, 7, `${ui.icons.rocket} Generating run scripts...`);
 
-  if (!isWindows) {
+  if (mode === 'docker') {
     // Create docker-compose inside tunnel folder (volume . = this folder)
     const composeFilePath = path.join(configDir, 'docker-compose.yml');
     const dockerComposeContent = `version: '3.8'
@@ -310,7 +298,6 @@ services:
       true // Default to Yes
     );
 
-
     if (startNow) {
       console.log('');
       ui.section('Starting Tunnel...');
@@ -343,31 +330,51 @@ services:
       }
     }
 
-
-
   } else {
-    // Windows Instructions
+    // Native mode — cross-platform launchers, no Docker involved
+    generateLaunchers(folderName);
+    ui.subStep(`Created: tunnels/${folderName}/start.{bat,sh,command}`, 'success');
+
     ui.complete('Setup Complete!');
-
-    const absConfigPath = path.join(configDir, 'config.yml');
-
     ui.summaryBox('Tunnel Information', [
       ['Name', tunnelName],
       ['ID', tunnelId],
       ['Domain', domain],
-      ['Type', 'Windows Native']
+      ['Type', 'Native']
     ]);
 
     console.log('');
-    ui.section('Quick Start (Run in terminal)');
-    ui.command(`cloudflared tunnel --config "${absConfigPath}" run`);
+    ui.section('Quick Start');
+    if (process.platform === 'win32') {
+      ui.command(`tunnels\\${folderName}\\start.bat`);
+    } else {
+      ui.command(`tunnels/${folderName}/start.sh`);
+    }
 
+    // Ask if user wants to start now
     console.log('');
-    ui.section('Install as Service (Runs in background)');
-    console.log(`  ${ui.c.dim}Run PowerShell as Administrator:${ui.c.reset}`);
-    ui.command(`cloudflared service install --config "${absConfigPath}"`);
-    console.log(`  ${ui.c.dim}Then start the service:${ui.c.reset}`);
-    ui.command('sc start cloudflared-agent');
+    const startNow = await ui.confirmAction(
+      '🚀 Do you want to start the tunnel now?',
+      true // Default to Yes
+    );
+
+    if (startNow) {
+      console.log('');
+      ui.section('Starting Tunnel...');
+      try {
+        const pid = nativeStart(folderName);
+        ui.success(`Tunnel started (pid ${pid})`);
+        console.log('');
+        ui.tip(`Logs: ${ui.c.cyan}${path.join(getRuntimeDir(folderName), '.log')}${ui.c.reset}`);
+      } catch (error) {
+        console.log('');
+        ui.error(`Failed to start tunnel: ${error.message}`);
+        console.log('');
+        ui.section('Manual Start:');
+        ui.command(process.platform === 'win32' ? `tunnels\\${folderName}\\start.bat` : `tunnels/${folderName}/start.sh`);
+        console.log('');
+      }
+    }
   }
 
   rl.close();

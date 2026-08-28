@@ -13,7 +13,7 @@ function makeTempRoot() {
   fs.mkdirSync(path.join(dir, 'tunnels'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'nginx', 'auth-gate'), { recursive: true });
-  for (const f of ['runtime.js', 'auth-gate.js', 'auth-gate-crypto.js']) {
+  for (const f of ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js']) {
     fs.copyFileSync(path.join(__dirname, '..', f), path.join(dir, 'scripts', f));
   }
   return dir;
@@ -21,7 +21,7 @@ function makeTempRoot() {
 
 function loadAuthGate(root) {
   const modPath = path.join(root, 'scripts', 'auth-gate.js');
-  for (const f of ['runtime.js', 'auth-gate.js', 'auth-gate-crypto.js']) {
+  for (const f of ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js']) {
     delete require.cache[require.resolve(path.join(root, 'scripts', f))];
   }
   return require(modPath);
