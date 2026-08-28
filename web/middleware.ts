@@ -9,6 +9,11 @@ const PUBLIC_PATTERNS = [
 ]
 
 export async function middleware(req: NextRequest) {
+  // Desktop app, no ADMIN_PASSWORD configured: the OS login already gates
+  // access to this machine, so the extra password gate is skipped. If the
+  // user explicitly sets ADMIN_PASSWORD it still applies, even in the app.
+  if (process.env.DESKTOP_MODE === '1' && !process.env.ADMIN_PASSWORD) return NextResponse.next()
+
   const { pathname } = req.nextUrl
   if (PUBLIC_PATTERNS.some(p => p.test(pathname))) return NextResponse.next()
 

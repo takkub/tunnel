@@ -1,10 +1,9 @@
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import { TUNNEL_DATA_DIR } from './paths'
 
-const ROOT = process.env.TUNNEL_ROOT || path.resolve(process.cwd(), '..')
-const DATA_DIR = process.env.TUNNEL_DATA_DIR || ROOT
-const CONFIG_FILE = path.join(DATA_DIR, 'runtime.config.json')
+const CONFIG_FILE = path.join(TUNNEL_DATA_DIR, 'runtime.config.json')
 
 export function isDockerAvailable(): boolean {
   try {

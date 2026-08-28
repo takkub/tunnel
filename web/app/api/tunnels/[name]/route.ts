@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { existsSync } from 'fs'
 import path from 'path'
-import { runScript, TUNNELS_DIR } from '@/lib/scripts'
+import { runScript } from '@/lib/scripts'
+import { TUNNELS_DIR } from '@/lib/paths'
 
 export const dynamic = 'force-dynamic'
 
