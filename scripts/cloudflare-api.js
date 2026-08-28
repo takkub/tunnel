@@ -1,6 +1,7 @@
 try { require('dotenv').config(); } catch {}
 const https = require('https');
 const { getZoneIdForHostname, loadDomains } = require('./domains');
+const settingsStore = require('./settings-store');
 
 /**
  * ลบ DNS Record ผ่าน Cloudflare API
@@ -136,9 +137,9 @@ async function findTunnelCnameRecords(zoneId, apiToken, tunnelId = null, domain 
  * @returns {Promise<{success: boolean, deleted: number, records: Array}>}
  */
 async function deleteTunnelCnames(tunnelId = null, domain = null, zoneIdOverride = null) {
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-  // resolve zoneId: explicit override > domain lookup > env fallback
-  const zoneId = zoneIdOverride || (domain ? getZoneIdForHostname(domain) : null) || process.env.ZONE_ID;
+  const apiToken = settingsStore.getCloudflareToken();
+  // resolve zoneId: explicit override > domain lookup > settings.json/.env fallback
+  const zoneId = zoneIdOverride || (domain ? getZoneIdForHostname(domain) : null) || settingsStore.getZoneId();
 
   if (!apiToken || !zoneId) {
     console.error('❌ ไม่พบ CLOUDFLARE_API_TOKEN หรือ ZONE_ID ใน .env file');

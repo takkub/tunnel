@@ -149,6 +149,12 @@ async function ensureCloudflared() {
   return downloadCloudflared();
 }
 
+// True once `cloudflared tunnel login` has completed — it writes this cert on
+// success, independent of which account/binary was used to log in.
+function isLoggedIn() {
+  return fs.existsSync(path.join(os.homedir(), '.cloudflared', 'cert.pem'));
+}
+
 module.exports = {
   BIN_DIR,
   findCloudflared,
@@ -156,6 +162,7 @@ module.exports = {
   releaseAsset,
   downloadCloudflared,
   ensureCloudflared,
+  isLoggedIn,
 };
 
 if (require.main === module) {

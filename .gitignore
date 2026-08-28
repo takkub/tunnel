@@ -103,6 +103,7 @@ CNAME_FIX.md
 
 web/.next/
 /runtime.config.json
+/settings.json
 
 # Generated nginx configs
 nginx/edge-snippet.conf
