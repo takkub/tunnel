@@ -133,3 +133,11 @@ web-verify.err
 
 # Tooling
 .claude/
+
+# Desktop app (Electron) — dist/build/resources are generated, build/ assets are checked in
+desktop/dist/
+desktop/dist-artifacts/
+desktop/resources/
+!desktop/build/
+!desktop/build/**
+.session-secret

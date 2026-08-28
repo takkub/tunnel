@@ -1,12 +1,13 @@
 import { spawn } from 'child_process'
 import path from 'path'
+import { TUNNEL_ROOT, TUNNEL_DATA_DIR } from './paths'
 
-const ROOT = path.resolve(process.cwd(), '..')
+const SCRIPT_ENV = { ...process.env, CI: '1', TUNNEL_ROOT, TUNNEL_DATA_DIR }
 
 export function runScript(scriptName: string, args: string[] = []): Promise<string> {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(ROOT, 'scripts', scriptName)
-    const proc = spawn('node', [scriptPath, ...args], { cwd: ROOT, env: { ...process.env, CI: '1' } })
+    const scriptPath = path.join(TUNNEL_ROOT, 'scripts', scriptName)
+    const proc = spawn('node', [scriptPath, ...args], { cwd: TUNNEL_DATA_DIR, env: SCRIPT_ENV })
     let out = ''
     let err = ''
     proc.stdout.on('data', (d: Buffer) => { out += d.toString() })
@@ -20,8 +21,8 @@ export function runScript(scriptName: string, args: string[] = []): Promise<stri
 
 export function streamScript(scriptName: string, args: string[] = [], onData: (line: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(ROOT, 'scripts', scriptName)
-    const proc = spawn('node', [scriptPath, ...args], { cwd: ROOT, env: { ...process.env, CI: '1' } })
+    const scriptPath = path.join(TUNNEL_ROOT, 'scripts', scriptName)
+    const proc = spawn('node', [scriptPath, ...args], { cwd: TUNNEL_DATA_DIR, env: SCRIPT_ENV })
     proc.stdout.on('data', (d: Buffer) => { d.toString().split('\n').filter(Boolean).forEach(onData) })
     proc.stderr.on('data', (d: Buffer) => { d.toString().split('\n').filter(Boolean).forEach(onData) })
     proc.on('close', code => { code === 0 ? resolve() : reject(new Error(`Exit ${code}`)) })

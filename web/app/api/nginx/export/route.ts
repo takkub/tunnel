@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { runScript } from '@/lib/scripts'
 import fs from 'fs'
 import path from 'path'
+import { TUNNEL_DATA_DIR } from '@/lib/paths'
 
 export const dynamic = 'force-dynamic'
 
-const CONFIG_PATH = path.resolve(process.cwd(), '..', 'nginx-sites.config.json')
+const CONFIG_PATH = path.join(TUNNEL_DATA_DIR, 'nginx-sites.config.json')
 
 export async function POST(req: Request) {
   try {

@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 import { existsSync } from 'fs'
 import path from 'path'
 import { runScript } from '@/lib/scripts'
+import { TUNNEL_DATA_DIR } from '@/lib/paths'
 
 export const dynamic = 'force-dynamic'
 
 export async function DELETE(_req: Request, { params }: { params: { name: string } }) {
-  const tunnelDir = path.resolve(process.cwd(), '..', 'tunnels', params.name)
+  const tunnelDir = path.join(TUNNEL_DATA_DIR, 'tunnels', params.name)
   if (!existsSync(tunnelDir)) {
     return NextResponse.json({ error: `Tunnel '${params.name}' not found` }, { status: 404 })
   }

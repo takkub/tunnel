@@ -22,7 +22,9 @@
     "cleanup:cnames": "node scripts/cleanup-all-cnames.js",
     "fix:dns": "node scripts/fix-app-dns.js",
     "delete:force": "node scripts/force-delete-tunnel.js",
-    "delete:quick": "node scripts/quick-delete-tunnel.js"
+    "delete:quick": "node scripts/quick-delete-tunnel.js",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:dist": "npm --prefix desktop run dist"
   },
   "dependencies": {
     "dotenv": "^17.2.3"

@@ -1,0 +1,60 @@
+{
+  "name": "tunnel-desktop",
+  "version": "1.0.0",
+  "description": "Cloudflare Tunnel Manager — desktop app",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json && cross-env NODE_ENV=development electron .",
+    "build": "npm --prefix ../web install --no-audit --no-fund && npm --prefix ../web run build && node scripts/copy-standalone.js && tsc -p tsconfig.json",
+    "dist": "npm run build && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.takkub.tunnel",
+    "productName": "Tunnel Manager",
+    "artifactName": "tunnel-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist-artifacts",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "build/*.png",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "resources/scripts", "to": "app/scripts" },
+      { "from": "resources/nginx", "to": "app/nginx" },
+      { "from": "resources/web-standalone", "to": "app/web" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "identity": null
+    },
+    "publish": [
+      { "provider": "github", "owner": "takkub", "repo": "tunnel" }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "get-port": "^5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.3"
+  }
+}
