@@ -1,16 +1,17 @@
 try { require('dotenv').config(); } catch {}
 const { listDnsRecords } = require('./cloudflare-api');
+const settingsStore = require('./settings-store');
 const ui = require('./ui-helper');
 
 async function main() {
     ui.header('CNAME Checker', 'List all Tunnel CNAME records');
 
-    const zoneId = process.env.ZONE_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    const zoneId = settingsStore.getZoneId();
+    const apiToken = settingsStore.getCloudflareToken();
 
     if (!zoneId || !apiToken) {
-        ui.error('Missing .env configuration');
-        console.log(`  ${ui.c.dim}Please check check your .env file:${ui.c.reset}`);
+        ui.error('Missing Cloudflare configuration');
+        console.log(`  ${ui.c.dim}Set these in Settings, or in your .env file:${ui.c.reset}`);
         console.log(`  ${ui.c.dim}ZONE_ID=${zoneId || 'MISSING'}${ui.c.reset}`);
         console.log(`  ${ui.c.dim}CLOUDFLARE_API_TOKEN=${apiToken ? '********' : 'MISSING'}${ui.c.reset}`);
         process.exit(1);

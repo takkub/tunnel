@@ -5,6 +5,7 @@ const https = require('https');
 const ui = require('./ui-helper');
 const { DATA_DIR, TUNNELS_DIR, getTunnelNames, nativeStatus, nativeStop } = require('./runtime');
 const { findCloudflared } = require('./cloudflared-bin');
+const settingsStore = require('./settings-store');
 try { require('dotenv').config({ path: path.join(DATA_DIR, '.env') }); } catch {}
 
 async function resolveTunnelName() {
@@ -87,7 +88,7 @@ function cfRequest(method, urlPath) {
       path: urlPath,
       method,
       headers: {
-        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        'Authorization': `Bearer ${settingsStore.getCloudflareToken()}`,
         'Content-Type': 'application/json'
       }
     };
@@ -104,10 +105,10 @@ function cfRequest(method, urlPath) {
 }
 
 async function deleteDnsRecords(hostnames) {
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const zoneId = process.env.ZONE_ID;
+  const token = settingsStore.getCloudflareToken();
+  const zoneId = settingsStore.getZoneId();
   if (!token || !zoneId) {
-    console.warn('[WARN] Missing CLOUDFLARE_API_TOKEN or ZONE_ID, skipping DNS deletion');
+    console.warn('[WARN] Missing Cloudflare API token or zone ID, skipping DNS deletion');
     return;
   }
   for (const hostname of hostnames) {

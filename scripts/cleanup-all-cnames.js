@@ -1,6 +1,7 @@
 try { require('dotenv').config(); } catch {}
 const { listDnsRecords, deleteDnsRecord } = require('./cloudflare-api');
 const { loadDomains } = require('./domains');
+const settingsStore = require('./settings-store');
 const ui = require('./ui-helper');
 const readline = require('readline');
 
@@ -23,17 +24,18 @@ function question(query) {
 async function main() {
     ui.warningHeader('Cleanup CNAMEs', 'Delete ALL Tunnel CNAME records');
 
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    const apiToken = settingsStore.getCloudflareToken();
 
-    // Build list of zones from domains.config.json; fallback to env ZONE_ID
+    // Build list of zones from domains.config.json; fallback to settings.json/.env ZONE_ID
     const configuredDomains = loadDomains();
+    const fallbackZoneId = settingsStore.getZoneId();
     const zones = configuredDomains.length
       ? configuredDomains.map(d => ({ domain: d.domain, zoneId: d.zoneId }))
-      : process.env.ZONE_ID ? [{ domain: 'default', zoneId: process.env.ZONE_ID }] : [];
+      : fallbackZoneId ? [{ domain: 'default', zoneId: fallbackZoneId }] : [];
 
     if (!apiToken || zones.length === 0) {
-        ui.error('Missing .env configuration');
-        console.log(`  ${ui.c.dim}Please check your .env file (CLOUDFLARE_API_TOKEN) and domains.config.json${ui.c.reset}`);
+        ui.error('Missing Cloudflare configuration');
+        console.log(`  ${ui.c.dim}Set the API token in Settings (or .env) and configure domains.config.json${ui.c.reset}`);
         process.exit(1);
     }
 

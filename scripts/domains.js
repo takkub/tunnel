@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ROOT } = require('./runtime');
+const settingsStore = require('./settings-store');
 
 const CONFIG_PATH = path.join(ROOT, 'domains.config.json');
 
@@ -24,12 +25,12 @@ function rootDomain(hostname) {
 
 /**
  * Return zoneId for a hostname by matching its root domain in domains.config.json.
- * Falls back to process.env.ZONE_ID if no match found.
+ * Falls back to settings.json/.env ZONE_ID if no match found.
  */
 function getZoneIdForHostname(hostname) {
   const rd = rootDomain(hostname);
   const entry = loadDomains().find(d => d.domain === rd);
-  return (entry && entry.zoneId) || process.env.ZONE_ID || null;
+  return (entry && entry.zoneId) || settingsStore.getZoneId();
 }
 
 module.exports = { loadDomains, saveDomains, getZoneIdForHostname, rootDomain };

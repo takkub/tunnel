@@ -351,12 +351,13 @@ async function main() {
       try {
         // ลบแต่ละ domain ทีละตัว
         const { deleteDnsRecord, listDnsRecords } = require('./cloudflare-api');
-        const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-        const zoneId = process.env.ZONE_ID;
+        const settingsStore = require('./settings-store');
+        const apiToken = settingsStore.getCloudflareToken();
+        const zoneId = settingsStore.getZoneId();
 
         if (!apiToken || !zoneId) {
-          ui.warning('Missing CLOUDFLARE_API_TOKEN or ZONE_ID in .env');
-          ui.tip('Set these in .env to enable automatic CNAME deletion');
+          ui.warning('Missing Cloudflare API token or zone ID');
+          ui.tip('Set these in Settings (or .env) to enable automatic CNAME deletion');
           console.log('');
           ui.box('Manual Deletion Required', [
             'Please delete CNAME records manually:',
