@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-28  
 **Tester:** QA Agent  
-**Target Commits:** `623adea` (Frontend) + `0639462` (Backend)  
-**Overall Result:** ⚠️ **FAIL (Blocking Bug in HTTPS / Cookie Flow)**
+**Target Commits:** `623adea` (Frontend) + `0639462` (Backend) + `d89503c` (Fix)  
+**Overall Result:** ✅ **PASS (All Tests & Re-Verification Passed)**
 
 ---
 
@@ -97,3 +97,23 @@ All screenshots have been captured and saved to `web/screenshots/` and copied to
 - `auth-gate-modal-disable.png` — Disabling auth gate confirmation modal
 - `dashboard-after-disable.png` — Dashboard after auth gate disabled
 - `auth-gate-direct-app.png` — Direct access to backend app after disabling gate
+- `reverify-app-authenticated.png` — Authenticated session rendering target app directly on HTTPS
+
+---
+
+## 5. Re-Verification Report (Post-Fix: Commit `d89503c`)
+
+### Overview
+Following the fix in commit `d89503c` (`absolute_redirect off;` & `port_in_redirect off;` in `scripts/auth-gate.js`), full end-to-end re-verification was conducted.
+
+| Re-Verify Step | Expected Behavior | Actual Result | Status |
+|---|---|---|---|
+| **1. `takkub qa-gate`** | Verification suite passes typecheck & 34 unit tests | Node verify passed in 4.7s (`ℹ pass 34 / ℹ fail 0`). | **PASS** |
+| **2. Enable Gate via Admin Web UI** | Enable password protection on `promptpay` with password `secret1234` | Modal submitted successfully, `🔒 Password` badge appeared, ingress updated to `:8890`. | **PASS** |
+| **3. HTTPS Relative Redirect Check** | `curl -I https://promptpay.sabuytube.xyz` returns relative `Location: /__gate/login?next=/` without `http://` scheme | `location: /__gate/login?next=/` returned with HTTP 302. | **PASS** |
+| **4. Browser Login & Session Persistence** | Navigate to `https://promptpay.sabuytube.xyz`, submit correct password, enter app without infinite redirect loop | Form submitted, `Secure` cookie accepted by browser on HTTPS, authenticated app rendered (`PromptPay App Success`). Page reload & new tab access retained session seamlessly. | **PASS** |
+| **5. Disable Gate via Web UI & Cleanup** | Disable password gate on `promptpay`, verify tunnel and config restore to original target | Gate disabled via UI, `promptpay/config.yml` reverted to `:6201`, `promptpay.conf` deleted, direct access restored (`HTTP 200 OK`). System left in **disabled** state. | **PASS** |
+
+### Conclusion
+The HTTPS / Cookie session redirect bug is **fully resolved**. All test cases have passed.
+
