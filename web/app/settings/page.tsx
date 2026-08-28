@@ -1,17 +1,18 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Button from '@/components/Button'
 import Toast from '@/components/Toast'
 import RefreshButton from '@/components/RefreshButton'
+import CopyButton from '@/components/CopyButton'
+import pkg from '../../package.json'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
-
 interface DomainEntry { domain: string; zoneId: string }
 
-interface RuntimeInfo {
-  mode: RuntimeMode
-  dockerAvailable: boolean
-  effective: string
+interface SettingsResponse {
+  cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; accountEmail?: string }
+  runtime: { mode: RuntimeMode; effectiveMode: 'docker' | 'native'; dockerAvailable: boolean; dataDir: string; desktopMode: boolean }
+  cloudflared: { installed: boolean; version: string | null; path: string | null; loggedIn: boolean }
 }
 
 function IconZap() {
@@ -47,26 +48,139 @@ const modeOptions: ModeOption[] = [
 ]
 
 export default function SettingsPage() {
-  const [reqs, setReqs] = useState<Record<string, boolean>>({})
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
-  const [reqsLoading, setReqsLoading] = useState(false)
-  const [runtime, setRuntime] = useState<RuntimeInfo | null>(null)
-  const [runtimeLoading, setRuntimeLoading] = useState(true)
-  const [selectedMode, setSelectedMode] = useState<RuntimeMode>('auto')
-  const [savingRuntime, setSavingRuntime] = useState(false)
-
-  // Domains
-  const [domains, setDomains] = useState<DomainEntry[]>([])
-  const [domainsLoading, setDomainsLoading] = useState(true)
-  const [domainInput, setDomainInput] = useState('')
-  const [zoneIdInput, setZoneIdInput] = useState('')
-  const [addingDomain, setAddingDomain] = useState(false)
-  const [deletingDomain, setDeletingDomain] = useState<string | null>(null)
-
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }
+
+  // ---- Unified settings (Cloudflare / Runtime / cloudflared) ----
+  const [settings, setSettings] = useState<SettingsResponse | null>(null)
+  const [settingsLoading, setSettingsLoading] = useState(true)
+  const [settingsUnavailable, setSettingsUnavailable] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<RuntimeMode>('auto')
+  const [savingRuntime, setSavingRuntime] = useState(false)
+
+  const [tokenInput, setTokenInput] = useState('')
+  const [editingToken, setEditingToken] = useState(false)
+  const [zoneIdInput, setZoneIdInput] = useState('')
+  const [savingCloudflare, setSavingCloudflare] = useState(false)
+
+  const [installing, setInstalling] = useState(false)
+  const [loggingIn, setLoggingIn] = useState(false)
+  const loginPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true)
+    try {
+      const res = await fetch('/api/settings')
+      if (res.ok) {
+        const data: SettingsResponse = await res.json()
+        setSettings(data)
+        setSelectedMode(data.runtime.mode)
+        setZoneIdInput(data.cloudflare.zoneId ?? '')
+        setSettingsUnavailable(false)
+      } else {
+        setSettingsUnavailable(true)
+      }
+    } catch {
+      setSettingsUnavailable(true)
+    } finally {
+      setSettingsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSettings()
+    return () => { if (loginPollRef.current) clearInterval(loginPollRef.current) }
+  }, [])
+
+  const handleSaveRuntime = async () => {
+    setSavingRuntime(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runtime: { mode: selectedMode } }),
+      })
+      const data = await res.json()
+      if (res.ok) { setSettings(data); showToast('บันทึก runtime mode แล้ว', 'success') }
+      else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+    } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
+    finally { setSavingRuntime(false) }
+  }
+
+  const handleSaveCloudflare = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingCloudflare(true)
+    try {
+      const body: { cloudflare: { apiToken?: string; zoneId?: string } } = { cloudflare: { zoneId: zoneIdInput.trim() } }
+      if (editingToken && tokenInput.trim()) body.cloudflare.apiToken = tokenInput.trim()
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSettings(data)
+        setTokenInput('')
+        setEditingToken(false)
+        showToast('บันทึก Cloudflare settings แล้ว', 'success')
+      } else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+    } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
+    finally { setSavingCloudflare(false) }
+  }
+
+  const handleInstallCloudflared = async () => {
+    setInstalling(true)
+    try {
+      const res = await fetch('/api/settings/cloudflared/install', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) { showToast(`ติดตั้ง cloudflared ${data.version ?? ''} แล้ว`, 'success'); await fetchSettings() }
+      else showToast(data.error ?? 'ติดตั้งไม่สำเร็จ', 'error')
+    } catch { showToast('ไม่สามารถติดตั้งได้', 'error') }
+    finally { setInstalling(false) }
+  }
+
+  const handleLoginCloudflared = async () => {
+    setLoggingIn(true)
+    try {
+      const res = await fetch('/api/settings/cloudflared/login', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok || !data.url) {
+        showToast(data.error ?? 'เริ่ม login ไม่สำเร็จ', 'error')
+        setLoggingIn(false)
+        return
+      }
+      window.open(data.url, '_blank', 'noopener,noreferrer')
+      const startedAt = Date.now()
+      loginPollRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch('/api/settings/cloudflared/login')
+          const pollData = await pollRes.json()
+          if (pollData.loggedIn) {
+            if (loginPollRef.current) clearInterval(loginPollRef.current)
+            setLoggingIn(false)
+            showToast('เข้าสู่ระบบ Cloudflare แล้ว', 'success')
+            await fetchSettings()
+          } else if (Date.now() - startedAt > 5 * 60 * 1000) {
+            if (loginPollRef.current) clearInterval(loginPollRef.current)
+            setLoggingIn(false)
+            showToast('หมดเวลารอ login', 'error')
+          }
+        } catch { /* keep polling */ }
+      }, 2000)
+    } catch { showToast('ไม่สามารถเริ่ม login ได้', 'error'); setLoggingIn(false) }
+  }
+
+  // ---- Domains ----
+  const [domains, setDomains] = useState<DomainEntry[]>([])
+  const [domainsLoading, setDomainsLoading] = useState(true)
+  const [domainInput, setDomainInput] = useState('')
+  const [domainZoneInput, setDomainZoneInput] = useState('')
+  const [addingDomain, setAddingDomain] = useState(false)
+  const [deletingDomain, setDeletingDomain] = useState<string | null>(null)
 
   const fetchDomains = async () => {
     setDomainsLoading(true)
@@ -82,17 +196,17 @@ export default function SettingsPage() {
 
   const handleAddDomain = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!domainInput || !zoneIdInput) return
+    if (!domainInput || !domainZoneInput) return
     setAddingDomain(true)
     try {
       const res = await fetch('/api/settings/domains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: domainInput.trim(), zoneId: zoneIdInput.trim() }),
+        body: JSON.stringify({ domain: domainInput.trim(), zoneId: domainZoneInput.trim() }),
       })
       if (res.ok) {
         setDomainInput('')
-        setZoneIdInput('')
+        setDomainZoneInput('')
         showToast('เพิ่ม domain แล้ว', 'success')
         fetchDomains()
       } else {
@@ -118,6 +232,9 @@ export default function SettingsPage() {
     finally { setDeletingDomain(null) }
   }
 
+  // ---- Requirements ----
+  const [reqs, setReqs] = useState<Record<string, boolean>>({})
+  const [reqsLoading, setReqsLoading] = useState(false)
   const fetchReqs = async () => {
     setReqsLoading(true)
     const res = await fetch('/api/requirements')
@@ -126,43 +243,8 @@ export default function SettingsPage() {
     setReqsLoading(false)
   }
 
-  const fetchRuntime = async () => {
-    setRuntimeLoading(true)
-    try {
-      const res = await fetch('/api/settings/runtime')
-      if (res.ok) {
-        const data: RuntimeInfo = await res.json()
-        setRuntime(data)
-        setSelectedMode(data.mode)
-      }
-    } catch { /* API not ready */ }
-    finally { setRuntimeLoading(false) }
-  }
-
-  const handleLogin = async () => {
-    const res = await fetch('/api/login', { method: 'POST' })
-    const data = await res.json()
-    showToast(data.message ?? 'login แล้ว', res.ok ? 'success' : 'error')
-  }
-
-  const handleSaveRuntime = async () => {
-    setSavingRuntime(true)
-    try {
-      const res = await fetch('/api/settings/runtime', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: selectedMode }),
-      })
-      const data = await res.json()
-      if (res.ok) { setRuntime(data); showToast('บันทึก runtime mode แล้ว', 'success') }
-      else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
-    } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
-    finally { setSavingRuntime(false) }
-  }
-
   useEffect(() => {
     fetchReqs()
-    fetchRuntime()
     fetchDomains()
   }, [])
 
@@ -173,25 +255,97 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
         <h2 className="font-semibold text-zinc-200 mb-1">Settings</h2>
-        <p className="text-sm text-zinc-500">จัดการ runtime mode, domains และตรวจสอบ requirements</p>
+        <p className="text-sm text-zinc-500">จัดการ Cloudflare, runtime mode และ cloudflared</p>
       </div>
+
+      {settingsUnavailable && !settingsLoading && (
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 text-sm text-amber-300">
+          Settings API ยังไม่พร้อมใช้งาน
+        </div>
+      )}
+
+      {/* Cloudflare */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+        <h2 className="font-semibold text-zinc-200">Cloudflare</h2>
+        {settingsLoading ? (
+          <div className="space-y-2 animate-pulse">
+            {[1, 2].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
+          </div>
+        ) : settings === null ? (
+          <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
+        ) : (
+          <form onSubmit={handleSaveCloudflare} className="space-y-3">
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">API Token</label>
+              {!editingToken ? (
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm font-mono text-zinc-300 truncate">
+                    {settings.cloudflare.apiTokenSet ? (settings.cloudflare.apiTokenMasked ?? '••••••••') : 'ยังไม่ได้ตั้งค่า'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingToken(true)}
+                    className="flex-shrink-0 px-3.5 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium transition-colors"
+                  >
+                    เปลี่ยน
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    autoFocus
+                    placeholder="วาง API Token ใหม่"
+                    value={tokenInput}
+                    onChange={e => setTokenInput(e.target.value)}
+                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setEditingToken(false); setTokenInput('') }}
+                    className="flex-shrink-0 px-3.5 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-sm font-medium transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                </div>
+              )}
+              {settings.cloudflare.accountEmail && (
+                <p className="text-xs text-zinc-500 mt-1.5">บัญชี: {settings.cloudflare.accountEmail}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">Zone ID</label>
+              <input
+                type="text"
+                placeholder="Zone ID จาก Cloudflare"
+                value={zoneIdInput}
+                onChange={e => setZoneIdInput(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+              />
+            </div>
+            <Button onClick={() => {}} disabled={savingCloudflare} loading={savingCloudflare} variant="primary" className="w-full">
+              บันทึก
+            </Button>
+          </form>
+        )}
+      </section>
 
       {/* Runtime Mode */}
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">Runtime Mode</h2>
-          {runtime && (
+          {settings && (
             <span className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">
-              {runtime.effective}
+              {settings.runtime.effectiveMode}
             </span>
           )}
         </div>
 
-        {runtimeLoading ? (
+        {settingsLoading ? (
           <div className="space-y-2 animate-pulse">
             {[1, 2, 3].map(i => <div key={i} className="h-16 bg-zinc-800 rounded-xl" />)}
           </div>
-        ) : runtime === null ? (
+        ) : settings === null ? (
           <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
         ) : (
           <>
@@ -219,11 +373,11 @@ export default function SettingsPage() {
                       <span className="font-medium text-zinc-100 text-sm">{opt.label}</span>
                       {opt.value === 'docker' && (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          runtime.dockerAvailable
+                          settings.runtime.dockerAvailable
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                             : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
                         }`}>
-                          {runtime.dockerAvailable ? 'พร้อมใช้' : 'ไม่พบ'}
+                          {settings.runtime.dockerAvailable ? 'พร้อมใช้' : 'ไม่พบ'}
                         </span>
                       )}
                     </div>
@@ -234,13 +388,75 @@ export default function SettingsPage() {
             </div>
             <Button
               onClick={handleSaveRuntime}
-              disabled={savingRuntime || selectedMode === runtime.mode}
+              disabled={savingRuntime || selectedMode === settings.runtime.mode}
               loading={savingRuntime}
               variant="primary"
               className="w-full"
             >
               บันทึก
             </Button>
+
+            <div className="pt-1 border-t border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-zinc-500">Data Directory</p>
+                  <p className="text-sm text-zinc-300 font-mono truncate">{settings.runtime.dataDir}</p>
+                </div>
+                <CopyButton value={settings.runtime.dataDir} />
+              </div>
+              {settings.runtime.desktopMode && (
+                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 font-medium">
+                  Desktop App Mode
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* cloudflared */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+        <h2 className="font-semibold text-zinc-200">cloudflared</h2>
+        {settingsLoading ? (
+          <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
+        ) : settings === null ? (
+          <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.cloudflared.installed ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                  <span className="text-sm text-zinc-200 font-medium">
+                    {settings.cloudflared.installed ? `ติดตั้งแล้ว (${settings.cloudflared.version ?? '?'})` : 'ยังไม่ได้ติดตั้ง'}
+                  </span>
+                </div>
+                {settings.cloudflared.path && (
+                  <p className="text-xs text-zinc-500 font-mono truncate mt-0.5">{settings.cloudflared.path}</p>
+                )}
+              </div>
+              <Button onClick={handleInstallCloudflared} disabled={installing} loading={installing} variant="secondary" className="text-xs px-3 py-2 min-h-0 flex-shrink-0">
+                {settings.cloudflared.installed ? 'ติดตั้งใหม่' : 'ติดตั้ง'}
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.cloudflared.loggedIn ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                <span className="text-sm text-zinc-200 font-medium">
+                  {settings.cloudflared.loggedIn ? 'เข้าสู่ระบบ Cloudflare แล้ว' : 'ยังไม่ได้เข้าสู่ระบบ'}
+                </span>
+              </div>
+              <Button
+                onClick={handleLoginCloudflared}
+                disabled={loggingIn || !settings.cloudflared.installed}
+                loading={loggingIn}
+                variant="secondary"
+                className="text-xs px-3 py-2 min-h-0 flex-shrink-0"
+              >
+                {settings.cloudflared.loggedIn ? 'เข้าสู่ระบบใหม่' : 'เข้าสู่ระบบ'}
+              </Button>
+            </div>
           </>
         )}
       </section>
@@ -292,13 +508,13 @@ export default function SettingsPage() {
             type="text"
             required
             placeholder="Zone ID (จาก Cloudflare)"
-            value={zoneIdInput}
-            onChange={e => setZoneIdInput(e.target.value)}
+            value={domainZoneInput}
+            onChange={e => setDomainZoneInput(e.target.value)}
             className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
           />
           <button
             type="submit"
-            disabled={addingDomain || !domainInput || !zoneIdInput}
+            disabled={addingDomain || !domainInput || !domainZoneInput}
             className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
           >
             {addingDomain && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
@@ -336,11 +552,13 @@ export default function SettingsPage() {
             ))}
           </ul>
         )}
+      </section>
 
-        <div className="pt-1">
-          <Button onClick={handleLogin} variant="secondary" className="w-full">
-            Login Cloudflare
-          </Button>
+      {/* App info */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-zinc-200">App</h2>
+          <span className="text-xs text-zinc-500 font-mono">v{pkg.version}</span>
         </div>
       </section>
     </div>

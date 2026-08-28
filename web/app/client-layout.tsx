@@ -96,6 +96,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    if (pathname === '/login' || pathname === '/setup') return
+    fetch('/api/setup-status')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (data?.needsOnboarding) router.replace('/setup') })
+      .catch(() => { /* setup-status API not ready */ })
+  }, [pathname, router])
+
+  useEffect(() => {
     if (!sidebarOpen) return
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setSidebarOpen(false)
@@ -116,7 +124,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
   }, [sidebarOpen])
 
-  if (pathname === '/login') return <>{children}</>
+  if (pathname === '/login' || pathname === '/setup') return <>{children}</>
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">

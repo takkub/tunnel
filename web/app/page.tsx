@@ -35,10 +35,10 @@ export default function DashboardPage() {
 
   const fetchRuntime = async () => {
     try {
-      const res = await fetch('/api/settings/runtime')
+      const res = await fetch('/api/settings')
       if (res.ok) {
         const data = await res.json()
-        setEffectiveMode(data.effective ?? data.mode ?? null)
+        setEffectiveMode(data.runtime?.effectiveMode ?? null)
       }
     } catch { /* API not yet available */ }
   }
