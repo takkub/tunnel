@@ -164,3 +164,71 @@ test('enable() does not create an htpasswd file (no longer used)', () => {
   enable('promptpay', 'secret123', NO_DOCKER);
   assert.equal(fs.existsSync(path.join(root, 'nginx', 'auth-gate', 'htpasswd')), false);
 });
+
+function forceNativeMode(root) {
+  fs.writeFileSync(path.join(root, 'runtime.config.json'), JSON.stringify({ mode: 'native' }));
+}
+
+test('enable() in native mode rewrites ingress to localhost instead of host.docker.internal', () => {
+  const root = makeTempRoot();
+  forceNativeMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, readState } = loadAuthGate(root);
+
+  enable('promptpay', 'secret123', NO_DOCKER);
+
+  const configText = fs.readFileSync(path.join(root, 'tunnels', 'promptpay', 'config.yml'), 'utf8');
+  assert.match(configText, /service: http:\/\/localhost:8890/);
+  assert.equal(configText.includes('host.docker.internal'), false);
+
+  const state = readState('promptpay');
+  assert.equal(state.enabled, true);
+  assert.equal(state.hostname, 'pay.example.com');
+  assert.equal(state.originalService, 'http://host.docker.internal:4000');
+});
+
+test('enable() in native mode does not write an nginx gate conf', () => {
+  const root = makeTempRoot();
+  forceNativeMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+  assert.equal(fs.existsSync(path.join(root, 'nginx', 'auth-gate', 'conf.d', 'promptpay.conf')), false);
+});
+
+test('disable() in native mode restores ingress and clears state without touching nginx conf.d', () => {
+  const root = makeTempRoot();
+  forceNativeMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, disable, status } = loadAuthGate(root);
+
+  enable('promptpay', 'secret123', NO_DOCKER);
+  disable('promptpay', NO_DOCKER);
+
+  const configText = fs.readFileSync(path.join(root, 'tunnels', 'promptpay', 'config.yml'), 'utf8');
+  assert.match(configText, /service: http:\/\/host\.docker\.internal:4000/);
+  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null });
+});
+
+test('enable() honors TUNNEL_DATA_DIR for tunnels/ resolution', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-gate-data-'));
+  fs.mkdirSync(path.join(dataDir, 'tunnels'), { recursive: true });
+  writeConfig(dataDir, 'promptpay', 'pay.example.com', 4000);
+
+  const prevDataDir = process.env.TUNNEL_DATA_DIR;
+  process.env.TUNNEL_DATA_DIR = dataDir;
+  try {
+    const { enable, readState } = loadAuthGate(root);
+    enable('promptpay', 'secret123', NO_DOCKER);
+    const state = readState('promptpay');
+    assert.equal(state.enabled, true);
+    assert.equal(
+      fs.existsSync(path.join(dataDir, 'tunnels', 'promptpay', 'auth-gate.json')),
+      true
+    );
+  } finally {
+    if (prevDataDir === undefined) delete process.env.TUNNEL_DATA_DIR;
+    else process.env.TUNNEL_DATA_DIR = prevDataDir;
+  }
+});
