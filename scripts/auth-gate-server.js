@@ -193,7 +193,7 @@ function createHandler(opts = {}) {
   };
 }
 
-module.exports = { createHandler, createRateLimiter };
+module.exports = { createHandler, createRateLimiter, parseCookies };
 
 if (require.main === module) {
   const port = parseInt(process.env.PORT || '8891', 10);

@@ -3,15 +3,16 @@
 // nginx does auth_request against auth-gate-server.js (cookie-based session),
 // redirecting unauthenticated visitors to a login page served by that same service.
 'use strict';
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const {
   ROOT,
-  TUNNELS_DIR,
+  TUNNELS_DIR: RUNTIME_TUNNELS_DIR,
   CONFIG_FILE,
   isInContainer,
   getHostProjectDir,
+  getEffectiveMode,
   dockerStatus,
   dockerStop,
   dockerStart,
@@ -30,6 +31,19 @@ const GATE_CONTAINER = 'tunnel-auth-gate';
 const GATE_SERVER_CONTAINER = 'tunnel-auth-gate-server';
 const DEFAULT_GATE_PORT = 8890;
 const DEFAULT_GATE_SVC_PORT = 8891;
+
+// TUNNEL_ROOT/TUNNEL_DATA_DIR are read defensively here (runtime.js may not yet honor
+// them) so tunnels/ and the native gate's runtime dir resolve consistently even before
+// runtime.js gains the same env support; default (no env vars set) matches RUNTIME_TUNNELS_DIR
+// exactly, so existing behavior/tests are unaffected.
+const TUNNEL_ROOT = process.env.TUNNEL_ROOT || ROOT;
+const TUNNEL_DATA_DIR = process.env.TUNNEL_DATA_DIR || TUNNEL_ROOT;
+const TUNNELS_DIR = process.env.TUNNEL_DATA_DIR ? path.join(TUNNEL_DATA_DIR, 'tunnels') : RUNTIME_TUNNELS_DIR;
+
+const RUNTIME_AUTH_GATE_DIR = path.join(TUNNEL_DATA_DIR, 'runtime', 'auth-gate');
+const NATIVE_GATE_PID_FILE = path.join(RUNTIME_AUTH_GATE_DIR, '.pid');
+const NATIVE_GATE_LOG_FILE = path.join(RUNTIME_AUTH_GATE_DIR, '.log');
+const AUTH_GATE_PROXY_SCRIPT = path.join(__dirname, 'auth-gate-proxy.js');
 
 const NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 
@@ -311,6 +325,53 @@ function reloadGate() {
   }
 }
 
+// Native (Docker-free) gate process: one shared node scripts/auth-gate-proxy.js, managed
+// the same way native tunnels are (detached spawn + pid file), routing table refreshed
+// via its own tunnels/ file watcher and — best effort, POSIX only — SIGHUP on reload.
+function nativeGateRunning() {
+  if (!fs.existsSync(NATIVE_GATE_PID_FILE)) return false;
+  const pid = parseInt(fs.readFileSync(NATIVE_GATE_PID_FILE, 'utf8').trim(), 10);
+  if (!Number.isFinite(pid)) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+function ensureNativeGateRunning() {
+  fs.mkdirSync(RUNTIME_AUTH_GATE_DIR, { recursive: true });
+  if (nativeGateRunning()) return;
+  const logFd = fs.openSync(NATIVE_GATE_LOG_FILE, 'a');
+  const env = Object.assign({}, process.env, { AUTH_GATE_PORT: String(getGatePort()) });
+  const proc = spawn(process.execPath, [AUTH_GATE_PROXY_SCRIPT], {
+    detached: true,
+    stdio: ['ignore', logFd, logFd],
+    env,
+  });
+  proc.unref();
+  fs.closeSync(logFd);
+  fs.writeFileSync(NATIVE_GATE_PID_FILE, String(proc.pid));
+}
+
+function reloadNativeGate() {
+  if (!fs.existsSync(NATIVE_GATE_PID_FILE)) return;
+  const pid = parseInt(fs.readFileSync(NATIVE_GATE_PID_FILE, 'utf8').trim(), 10);
+  if (!Number.isFinite(pid)) return;
+  try { process.kill(pid, 'SIGHUP'); } catch {}
+}
+
+// Stops the shared native gate process once no tunnel has the gate enabled anymore.
+function stopNativeGateIfIdle() {
+  if (!fs.existsSync(NATIVE_GATE_PID_FILE)) return;
+  let anyEnabled = false;
+  if (fs.existsSync(TUNNELS_DIR)) {
+    for (const n of fs.readdirSync(TUNNELS_DIR)) {
+      if (readState(n).enabled) { anyEnabled = true; break; }
+    }
+  }
+  if (anyEnabled) return;
+  const pid = parseInt(fs.readFileSync(NATIVE_GATE_PID_FILE, 'utf8').trim(), 10);
+  if (Number.isFinite(pid)) { try { process.kill(pid); } catch {} }
+  try { fs.unlinkSync(NATIVE_GATE_PID_FILE); } catch {}
+}
+
 // Best-effort: config.yml and gate state are already persisted by the time this runs,
 // so a hiccup restarting the live tunnel process shouldn't fail the whole enable/disable —
 // the new ingress takes effect on whatever next restarts the tunnel.
@@ -339,12 +400,14 @@ function enable(name, password, opts) {
   const hostname = getHostnameFromConfig(name);
   if (!hostname) throw new Error(`No hostname found in config for tunnel: ${name}`);
 
+  const mode = getEffectiveMode();
   const state = readState(name);
   const gatePort = state.gatePort || getGatePort();
 
   if (!state.enabled) {
+    const gateHost = mode === 'native' ? 'localhost' : 'host.docker.internal';
     const configText = fs.readFileSync(configPath, 'utf8');
-    const { text, originalService } = rewriteServiceForHostname(configText, hostname, `http://host.docker.internal:${gatePort}`);
+    const { text, originalService } = rewriteServiceForHostname(configText, hostname, `http://${gateHost}:${gatePort}`);
     fs.writeFileSync(configPath, text);
     state.originalService = originalService;
   }
@@ -352,14 +415,21 @@ function enable(name, password, opts) {
   state.enabled = true;
   state.passwordHash = hashPassword(password);
   state.gatePort = gatePort;
+  state.hostname = hostname;
   delete state.username; // legacy field from the basic-auth design — no longer used
   writeState(name, state);
 
-  writeGateConfig(name, hostname, state.originalService);
-
-  if (!opts.skipDocker) {
-    ensureGateRunning();
-    reloadGate();
+  if (mode === 'native') {
+    if (!opts.skipDocker) {
+      ensureNativeGateRunning();
+      reloadNativeGate();
+    }
+  } else {
+    writeGateConfig(name, hostname, state.originalService);
+    if (!opts.skipDocker) {
+      ensureGateRunning();
+      reloadGate();
+    }
   }
   if (!opts.skipTunnelRestart) restartTunnelIfRunning(name);
 
@@ -372,6 +442,7 @@ function disable(name, opts) {
   const state = readState(name);
   if (!state.enabled) return status(name);
 
+  const mode = getEffectiveMode();
   const configPath = getConfigPath(name);
   const hostname = getHostnameFromConfig(name);
   if (hostname && fs.existsSync(configPath) && state.originalService) {
@@ -380,11 +451,18 @@ function disable(name, opts) {
     fs.writeFileSync(configPath, text);
   }
 
-  removeGateConfig(name);
+  if (mode !== 'native') removeGateConfig(name);
   const p = getStatePath(name);
   if (fs.existsSync(p)) fs.unlinkSync(p);
 
-  if (!opts.skipDocker) reloadGate();
+  if (!opts.skipDocker) {
+    if (mode === 'native') {
+      reloadNativeGate();
+      stopNativeGateIfIdle();
+    } else {
+      reloadGate();
+    }
+  }
   if (!opts.skipTunnelRestart) restartTunnelIfRunning(name);
 
   return status(name);
@@ -401,9 +479,10 @@ function changePassword(name, password, opts) {
   writeState(name, state);
 
   if (!opts.skipDocker) {
-    ensureGateRunning();
     // cookie value is only ever verified by the running gate service, which reads
     // auth-gate.json fresh per request — no reload needed for a password change.
+    if (getEffectiveMode() === 'native') ensureNativeGateRunning();
+    else ensureGateRunning();
   }
 
   return status(name);
@@ -423,6 +502,10 @@ module.exports = {
   rewriteServiceForHostname,
   getGatePort,
   getGateServicePort,
+  nativeGateRunning,
+  ensureNativeGateRunning,
+  reloadNativeGate,
+  stopNativeGateIfIdle,
 };
 
 if (require.main === module) {
