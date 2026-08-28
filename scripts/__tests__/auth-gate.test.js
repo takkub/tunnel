@@ -123,6 +123,8 @@ test('generated nginx conf uses auth_request against the gate service, not auth_
 
   const conf = fs.readFileSync(path.join(root, 'nginx', 'auth-gate', 'conf.d', 'promptpay.conf'), 'utf8');
   assert.match(conf, /server_name pay\.example\.com;/);
+  assert.match(conf, /absolute_redirect off;/);
+  assert.match(conf, /port_in_redirect off;/);
   assert.match(conf, /auth_request \/__gate\/verify;/);
   assert.match(conf, /error_page 401 = @login;/);
   assert.match(conf, /location = \/__gate\/verify \{/);

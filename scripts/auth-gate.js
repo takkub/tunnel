@@ -148,6 +148,8 @@ function writeGateConfig(name, hostname, originalService) {
   const conf = `server {
     listen 80;
     server_name ${hostname};
+    absolute_redirect off;
+    port_in_redirect off;
 
     location / {
         auth_request /__gate/verify;

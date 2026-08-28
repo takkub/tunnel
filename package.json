@@ -10,6 +10,7 @@
     "start": "docker-compose up -d",
     "stop": "docker-compose down",
     "test": "node --test scripts/__tests__/*.test.js",
+    "verify": "npm --prefix web run typecheck && npm test",
     "check": "node scripts/check-requirements.js",
     "login": "node scripts/login.js",
     "setup": "node scripts/setup-tunnel.js",
