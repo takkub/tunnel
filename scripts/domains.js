@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { ROOT } = require('./runtime');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'domains.config.json');
+const CONFIG_PATH = path.join(ROOT, 'domains.config.json');
 
 function loadDomains() {
   try {

@@ -1,17 +1,14 @@
 const { execSync } = require('child_process');
-const path = require('path');
 const ui = require('./ui-helper');
+const { TUNNELS_DIR } = require('./runtime');
+const { findCloudflared } = require('./cloudflared-bin');
 
 // ตรวจสอบว่ามี cloudflared ติดตั้งหรือไม่ ถ้าไม่ใช้ Docker แทน
 function getCloudflaredCommand() {
-  try {
-    execSync('cloudflared --version', { stdio: 'pipe' });
-    return 'cloudflared';
-  } catch (error) {
-    // ใช้ Docker แทน
-    const projectRoot = path.join(__dirname, '..');
-    return `docker run --rm -v "${projectRoot}/tunnels:/etc/cloudflared" cloudflare/cloudflared:latest`;
-  }
+  const bin = findCloudflared();
+  if (bin) return `"${bin}"`;
+  // ใช้ Docker แทน
+  return `docker run --rm -v "${TUNNELS_DIR.replace(/\\/g, '/')}:/etc/cloudflared" cloudflare/cloudflared:latest`;
 }
 
 ui.header('Cloudflare Tunnels', 'Status Dashboard');

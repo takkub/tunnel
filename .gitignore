@@ -130,6 +130,7 @@ web-verify.err
 # Runtime state
 /runtime/
 /tunnels/
+/bin/
 
 # Tooling
 .claude/
