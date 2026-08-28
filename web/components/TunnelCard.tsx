@@ -1,7 +1,14 @@
 'use client'
 import { useState } from 'react'
+import AuthGateModal from './AuthGateModal'
 
-interface Tunnel { name: string; running: boolean; hostname?: string; port?: number | null }
+interface Tunnel {
+  name: string
+  running: boolean
+  hostname?: string
+  port?: number | null
+  authGate?: { enabled: boolean }
+}
 
 interface Props {
   tunnel: Tunnel
@@ -17,6 +24,7 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   const [dnsSuccess, setDnsSuccess] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showAuthGate, setShowAuthGate] = useState(false)
 
   const busy = busyAction !== null
   const hasHostname = !!(tunnel.hostname && tunnel.hostname !== 'cfd')
@@ -110,12 +118,26 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
                     :{tunnel.port}
                   </span>
                 )}
+                {tunnel.authGate?.enabled && (
+                  <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    🔒 Password
+                  </span>
+                )}
               </div>
             )}
-            {!hasHostname && tunnel.port != null && (
-              <p className="mt-0.5 font-mono text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 inline-block">
-                :{tunnel.port}
-              </p>
+            {!hasHostname && (tunnel.port != null || tunnel.authGate?.enabled) && (
+              <div className="flex items-center gap-1 mt-0.5">
+                {tunnel.port != null && (
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 inline-block">
+                    :{tunnel.port}
+                  </span>
+                )}
+                {tunnel.authGate?.enabled && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    🔒 Password
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
@@ -179,6 +201,24 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
                 <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
               </svg>
             )}
+          </button>
+
+          {/* Password gate button */}
+          <button
+            onClick={() => setShowAuthGate(true)}
+            disabled={busy}
+            aria-label="Password protection"
+            title="Password protection"
+            className={`min-h-[44px] w-11 rounded-lg border text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center ${
+              tunnel.authGate?.enabled
+                ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
           </button>
 
           {/* Delete button */}
@@ -257,6 +297,19 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
           </button>
         )}
       </div>
+
+      {showAuthGate && (
+        <AuthGateModal
+          tunnelName={tunnel.name}
+          onSuccess={async msg => {
+            setShowAuthGate(false)
+            onToast(msg, 'success')
+            await onRefresh()
+          }}
+          onError={msg => onToast(msg, 'error')}
+          onClose={() => setShowAuthGate(false)}
+        />
+      )}
     </div>
   )
 }
