@@ -118,6 +118,64 @@ test('parseLogText: empty log -> no connections, no error, connecting when runni
   assert.equal(deriveHealth({ running: false, ...parsed }), 'stopped');
 });
 
+test('parseLogText: benign resolver-refresh ERR after 4 registered connections stays connected (real-world false-positive)', () => {
+  const log = [
+    line('2026-08-29T13:23:10Z', 'INF', 'Registered tunnel connection connIndex=0 location=bkk09 protocol=quic'),
+    line('2026-08-29T13:23:11Z', 'INF', 'Registered tunnel connection connIndex=1 location=bkk09 protocol=quic'),
+    line('2026-08-29T13:23:12Z', 'INF', 'Registered tunnel connection connIndex=2 location=sin06 protocol=quic'),
+    line('2026-08-29T13:23:13Z', 'INF', 'Registered tunnel connection connIndex=3 location=sin06 protocol=quic'),
+    line('2026-08-29T15:37:42Z', 'ERR', 'Failed to refresh DNS local resolver error="lookup region1.v2.argotunnel.com: i/o timeout"'),
+  ].join('\n');
+
+  const parsed = parseLogText(log);
+  assert.equal(parsed.activeConnections, 4);
+  assert.equal(parsed.lastError, null); // benign edge-retry noise, not a tunnel-level error
+  assert.equal(parsed.lastErrorAt, null);
+  assert.ok(parsed.lastWarning);
+  assert.match(parsed.lastWarning.message, /Failed to refresh DNS local resolver/);
+  assert.notEqual(parsed.lastWarning.hint, 'แก้ hostname ไม่ได้ (ปัญหา DNS)'); // narrowed dns hint must not fire here
+
+  const health = deriveHealth({ running: true, ...parsed });
+  assert.equal(health, 'connected');
+});
+
+test('parseLogText: a real fatal auth error after start -> error state', () => {
+  const log = [
+    line('2026-08-29T13:00:00Z', 'INF', 'Starting tunnel tunnelID=abc'),
+    line('2026-08-29T13:00:01Z', 'ERR', 'Unauthorized: Failed to get tunnel'),
+  ].join('\n');
+
+  const parsed = parseLogText(log);
+  assert.ok(parsed.lastError);
+  assert.match(parsed.lastError.message, /Unauthorized/);
+  assert.equal(parsed.lastWarning, null);
+
+  const health = deriveHealth({ running: true, ...parsed });
+  assert.equal(health, 'error');
+});
+
+test('parseLogText: reconnect storm of benign errors then 4 registered -> connected', () => {
+  const log = [
+    line('2026-08-29T10:00:00Z', 'INF', 'Registered tunnel connection connIndex=0 location=bkk09 protocol=quic'),
+    line('2026-08-29T10:00:01Z', 'INF', 'Registered tunnel connection connIndex=1 location=bkk09 protocol=quic'),
+    line('2026-08-29T10:00:10Z', 'ERR', 'Failed to dial a quic connection error="timeout: no recent network activity"'),
+    line('2026-08-29T10:00:11Z', 'INF', 'Unregistered tunnel connection connIndex=1'),
+    line('2026-08-29T10:00:12Z', 'ERR', 'Failed to serve tunnel connection error="context canceled"'),
+    line('2026-08-29T10:00:20Z', 'ERR', 'Serve tunnel error error="failed to accept incoming stream requests"'),
+    line('2026-08-29T10:00:21Z', 'INF', 'Registered tunnel connection connIndex=1 location=bkk09 protocol=quic'),
+    line('2026-08-29T10:00:22Z', 'INF', 'Registered tunnel connection connIndex=2 location=sin06 protocol=quic'),
+    line('2026-08-29T10:00:23Z', 'INF', 'Registered tunnel connection connIndex=3 location=sin06 protocol=quic'),
+  ].join('\n');
+
+  const parsed = parseLogText(log);
+  assert.equal(parsed.activeConnections, 4);
+  assert.equal(parsed.lastError, null);
+  assert.ok(parsed.lastWarning); // storm noise still visible as a warning
+
+  const health = deriveHealth({ running: true, ...parsed });
+  assert.equal(health, 'connected');
+});
+
 test('errorHint: recognizes common cloudflared errors, null for unknown text', () => {
   assert.equal(errorHint('Couldn\'t start tunnel error="Provided Tunnel Credentials are invalid"'), 'credentials ผิด/ถูกลบใน Cloudflare');
   assert.equal(errorHint('context canceled'), 'การเชื่อมต่อถูกยกเลิก (มักเกิดตอนปิด/รีสตาร์ททันเนล)');

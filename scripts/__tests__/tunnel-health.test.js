@@ -241,7 +241,7 @@ test('tunnel-health.js --all: shape matches web/lib/health.ts (TunnelHealthRespo
   assert.equal(result.tunnels.length, 2);
   const expectedKeys = [
     'name', 'running', 'health', 'connections', 'activeConnections',
-    'lastError', 'originError', 'lastOriginError', 'lastEventAt', 'pid', 'uptimeSec', 'logPath',
+    'lastError', 'originError', 'lastOriginError', 'lastWarning', 'lastEventAt', 'pid', 'uptimeSec', 'logPath',
   ].sort();
   for (const t of result.tunnels) {
     assert.deepEqual(Object.keys(t).sort(), expectedKeys);

@@ -12,7 +12,9 @@ const ERROR_HINTS = [
   [/tunnel credentials|provided tunnel credentials|401|unauthorized/i, 'credentials ผิด/ถูกลบใน Cloudflare'],
   [/connection refused/i, 'ปลายทางปฏิเสธการเชื่อมต่อ (service ยังไม่ start หรือ port ผิด)'],
   [/context canceled/i, 'การเชื่อมต่อถูกยกเลิก (มักเกิดตอนปิด/รีสตาร์ททันเนล)'],
-  [/no such host|dns/i, 'แก้ hostname ไม่ได้ (ปัญหา DNS)'],
+  // "no such host" only — a bare "dns" match also caught the benign
+  // "Failed to refresh DNS local resolver" edge retry noise (see BENIGN_ERR_RE).
+  [/no such host/i, 'แก้ hostname ไม่ได้ (ปัญหา DNS)'],
   [/timeout|timed out/i, 'เชื่อมต่อ/รอ response นานเกินไป (timeout)'],
   [/i\/o timeout|EOF/i, 'การเชื่อมต่อกับ Cloudflare หลุดกลางทาง'],
 ];
@@ -31,6 +33,11 @@ function errorHint(message) {
 // reach the origin service: dial tcp 127.0.0.1:3000: ..."'.
 const ORIGIN_ERROR_RE = /unable to reach the origin service/i;
 
+// cloudflared's edge connections retry-and-recover on their own — these ERR
+// lines are noise from that churn, not a tunnel-level problem. Only
+// credentials/registration/config errors below stay tunnel-level (lastError).
+const BENIGN_ERR_RE = /failed to refresh dns local resolver|failed to refresh feature selector|failed to run the datagram handler|failed to accept incoming stream requests|failed to serve tunnel connection|serve tunnel error|connection terminated|failed to dial a quic connection/i;
+
 // Parses a text log (or tail of one) into current connection state.
 // Returns activeConnections clamped to [0,4] per cloudflared's max of 4 edge connections.
 function parseLogText(text) {
@@ -39,6 +46,8 @@ function parseLogText(text) {
   let lastErrorAt = null; // ms epoch, or null if unparseable/absent
   let lastOriginError = null; // {time, message, hint} — origin service unreachable
   let lastOriginErrorAt = null;
+  let lastWarning = null; // {time, message, hint} — benign edge-retry noise, doesn't affect health
+  let lastWarningAt = null;
   let lastRegisteredAt = null;
   let lastEventAt = null;
 
@@ -78,6 +87,9 @@ function parseLogText(text) {
       if (ORIGIN_ERROR_RE.test(message)) {
         lastOriginError = { time: validTs ? tsRaw : null, message, hint: errorHint(message) };
         if (validTs) lastOriginErrorAt = tsMs;
+      } else if (BENIGN_ERR_RE.test(message)) {
+        lastWarning = { time: validTs ? tsRaw : null, message, hint: errorHint(message) };
+        if (validTs) lastWarningAt = tsMs;
       } else {
         lastError = { time: validTs ? tsRaw : null, message, hint: errorHint(message) };
         if (validTs) lastErrorAt = tsMs;
@@ -93,6 +105,8 @@ function parseLogText(text) {
     lastErrorAt,
     lastOriginError,
     lastOriginErrorAt,
+    lastWarning,
+    lastWarningAt,
     lastRegisteredAt,
     lastEventAt,
   };
@@ -118,4 +132,4 @@ function deriveHealth({ running, activeConnections, lastErrorAt, lastRegisteredA
   return 'connected';
 }
 
-module.exports = { parseLogText, deriveHealth, errorHint, LINE_RE, ORIGIN_ERROR_RE };
+module.exports = { parseLogText, deriveHealth, errorHint, LINE_RE, ORIGIN_ERROR_RE, BENIGN_ERR_RE };
