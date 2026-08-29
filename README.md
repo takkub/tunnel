@@ -1,5 +1,18 @@
 # Tunnel Management Scripts
 
+## ติดตั้งผ่าน npm
+
+```bash
+npm install -g @takkub/tunnel
+tunnel setup          # opens the setup wizard in your browser (installs cloudflared, sets up your token/zone/password)
+tunnel web            # start the web admin dashboard on http://localhost:8888
+tunnel create my-app my-app.example.com 3000
+tunnel start my-app
+tunnel list
+```
+
+Data (tunnels, credentials, settings) is stored under `~/.tunnel` by default — override with the `TUNNEL_DATA_DIR` env var. Run `tunnel --help` for the full command list. See [`docs/ops/npm-cli-package.md`](docs/ops/npm-cli-package.md) for how this package is built/published.
+
 ## Run Web Admin UI
 
 | Platform | One-click |
