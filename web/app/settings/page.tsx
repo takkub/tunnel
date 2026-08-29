@@ -11,6 +11,7 @@ interface DomainEntry { domain: string; zoneId: string }
 
 interface SettingsResponse {
   cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; accountEmail?: string }
+  desktop: { launchAtLogin: boolean; autostartTunnelsOnLaunch: boolean }
   runtime: { mode: RuntimeMode; effectiveMode: 'docker' | 'native'; dockerAvailable: boolean; dataDir: string; desktopMode: boolean }
   cloudflared: { installed: boolean; version: string | null; path: string | null; loggedIn: boolean }
 }
@@ -66,6 +67,8 @@ export default function SettingsPage() {
   const [zoneIdInput, setZoneIdInput] = useState('')
   const [savingCloudflare, setSavingCloudflare] = useState(false)
 
+  const [savingDesktop, setSavingDesktop] = useState<'launchAtLogin' | 'autostartTunnelsOnLaunch' | null>(null)
+
   const [installing, setInstalling] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
   const loginPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -108,6 +111,31 @@ export default function SettingsPage() {
       else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
     } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
     finally { setSavingRuntime(false) }
+  }
+
+  const handleToggleDesktop = async (key: 'launchAtLogin' | 'autostartTunnelsOnLaunch') => {
+    if (!settings) return
+    const next = !settings.desktop[key]
+    setSavingDesktop(key)
+    setSettings({ ...settings, desktop: { ...settings.desktop, [key]: next } })
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ desktop: { [key]: next } }),
+      })
+      const data = await res.json()
+      if (res.ok) { setSettings(data); showToast('บันทึกแล้ว', 'success') }
+      else {
+        setSettings(prev => prev && { ...prev, desktop: { ...prev.desktop, [key]: !next } })
+        showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+      }
+    } catch {
+      setSettings(prev => prev && { ...prev, desktop: { ...prev.desktop, [key]: !next } })
+      showToast('ไม่สามารถบันทึกได้', 'error')
+    } finally {
+      setSavingDesktop(null)
+    }
   }
 
   const handleSaveCloudflare = async (e: React.FormEvent) => {
@@ -413,6 +441,55 @@ export default function SettingsPage() {
           </>
         )}
       </section>
+
+      {/* Desktop */}
+      {settings?.runtime.desktopMode && (
+        <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+          <h2 className="font-semibold text-zinc-200">Desktop</h2>
+
+          <label className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm text-zinc-200 font-medium">เปิดแอปอัตโนมัติเมื่อเข้าเครื่อง</p>
+              <p className="text-xs text-zinc-500 mt-0.5">แอปจะเปิดเองแบบซ่อนใน tray ตอนเปิดเครื่อง</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.desktop.launchAtLogin}
+              onClick={() => handleToggleDesktop('launchAtLogin')}
+              disabled={savingDesktop !== null}
+              className={`flex-shrink-0 relative w-11 h-6 rounded-full transition-colors duration-150 disabled:opacity-40 ${
+                settings.desktop.launchAtLogin ? 'bg-orange-500' : 'bg-zinc-700'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-150 ${
+                settings.desktop.launchAtLogin ? 'translate-x-5' : ''
+              }`} />
+            </button>
+          </label>
+
+          <label className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm text-zinc-200 font-medium">เริ่ม tunnels ที่ตั้ง autostart ไว้เมื่อเปิดแอป</p>
+              <p className="text-xs text-zinc-500 mt-0.5">ใช้ร่วมกับปุ่ม ⚡ Autostart บนการ์ดแต่ละ tunnel</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.desktop.autostartTunnelsOnLaunch}
+              onClick={() => handleToggleDesktop('autostartTunnelsOnLaunch')}
+              disabled={savingDesktop !== null}
+              className={`flex-shrink-0 relative w-11 h-6 rounded-full transition-colors duration-150 disabled:opacity-40 ${
+                settings.desktop.autostartTunnelsOnLaunch ? 'bg-orange-500' : 'bg-zinc-700'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-150 ${
+                settings.desktop.autostartTunnelsOnLaunch ? 'translate-x-5' : ''
+              }`} />
+            </button>
+          </label>
+        </section>
+      )}
 
       {/* cloudflared */}
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
