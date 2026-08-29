@@ -3,6 +3,7 @@ import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import getPort from 'get-port'
+import { buildSpawnEnv } from './dotenv-env'
 
 // Where scripts/ lives — read-only in a packaged app, the repo root in dev.
 export const TUNNEL_ROOT = app.isPackaged
@@ -36,8 +37,11 @@ export async function startServer(): Promise<{ port: number; url: string }> {
   const port = await getPort({ port: [8888, 8889, 8890, 8891, 8892] })
   const sessionSecret = loadOrCreateSessionSecret()
 
-  const env = {
-    ...process.env,
+  // <TUNNEL_DATA_DIR>/.env holds ADMIN_PASSWORD/CLOUDFLARE_API_TOKEN/ZONE_ID
+  // etc. — the Electron main process never reads it itself, so without this
+  // the spawned Next server would have none of it (and, per middleware.ts,
+  // silently skip the login gate for lack of ADMIN_PASSWORD).
+  const env = buildSpawnEnv(TUNNEL_DATA_DIR, {
     PORT: String(port),
     HOSTNAME: '127.0.0.1',
     NODE_ENV: 'production',
@@ -45,7 +49,7 @@ export async function startServer(): Promise<{ port: number; url: string }> {
     TUNNEL_ROOT,
     TUNNEL_DATA_DIR,
     SESSION_SECRET: process.env.SESSION_SECRET || sessionSecret,
-  }
+  })
 
   if (app.isPackaged) {
     const serverJs = path.join(TUNNEL_ROOT, 'web', 'server.js')

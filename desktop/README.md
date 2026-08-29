@@ -20,14 +20,30 @@ needs `npm install --prefix desktop` before `npm --prefix desktop run dist`.
 | `TUNNEL_DATA_DIR` | `app.getPath('userData')` | repo root |
 | `SESSION_SECRET` | auto-generated once, persisted at `TUNNEL_DATA_DIR/.session-secret` | same |
 | `DESKTOP_MODE` | `1` | `1` |
+| `ADMIN_PASSWORD`, `CLOUDFLARE_API_TOKEN`, `ZONE_ID`, ... | read from `TUNNEL_DATA_DIR/.env` if present | same |
 
 `web/lib/paths.ts` reads `TUNNEL_ROOT`/`TUNNEL_DATA_DIR` with a dev fallback
 of `path.resolve(process.cwd(), '..')`, so the browser dev flow (`npm run
 web:dev` from the repo root) is unaffected.
 
+The Electron main process never reads `TUNNEL_DATA_DIR/.env` into its own
+`process.env` — `src/dotenv-env.js`'s `buildSpawnEnv()` parses it with
+`dotenv.parse()` (not `dotenv.config()`, so no side effect on the main
+process) and threads the result explicitly into every child it spawns: the
+Next server (`src/server.ts`), and the tray/autostart scripts
+(`src/autostart.ts`, `src/tunnels.ts`). A key already present on the real
+`process.env` always wins over the same key in `.env`, matching
+`scripts/web-serve.js`'s native-mode convention.
+
 With `DESKTOP_MODE=1` and no `ADMIN_PASSWORD` set, the web login is skipped
-(see `web/middleware.ts`) — the OS login already gates the machine. Setting
-`ADMIN_PASSWORD` still enforces the password gate even inside the app.
+for loopback requests only (see `web/middleware.ts` +
+`web/lib/redirect-origin.js`'s `isLoopbackHost`) — the OS login already gates
+the machine for someone sitting at it. A request whose Host (or
+`X-Forwarded-Host`) is not `localhost`/`127.0.0.1`/`::1` — i.e. anything
+arriving over a public cloudflared tunnel — gets a `403` instead of a free
+pass, even with no `ADMIN_PASSWORD` configured; set `ADMIN_PASSWORD` before
+exposing the app via a tunnel. Setting `ADMIN_PASSWORD` always enforces the
+password gate regardless of how the request arrived.
 
 ## Launch at login / autostart tunnels
 

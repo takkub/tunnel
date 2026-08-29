@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySession } from './lib/auth'
-import { resolveOrigin } from './lib/redirect-origin'
+import { resolveOrigin, resolveHost, isLoopbackHost } from './lib/redirect-origin'
 
 // _next/static, _next/image, favicon.ico are excluded by the matcher config below
 const PUBLIC_PATTERNS = [
@@ -11,9 +11,17 @@ const PUBLIC_PATTERNS = [
 
 export async function middleware(req: NextRequest) {
   // Desktop app, no ADMIN_PASSWORD configured: the OS login already gates
-  // access to this machine, so the extra password gate is skipped. If the
-  // user explicitly sets ADMIN_PASSWORD it still applies, even in the app.
-  if (process.env.DESKTOP_MODE === '1' && !process.env.ADMIN_PASSWORD) return NextResponse.next()
+  // access to this machine, so the extra password gate is skipped — but only
+  // for requests that actually reached us over loopback. A request arriving
+  // via a cloudflared tunnel (Host is the public domain, not
+  // localhost/127.0.0.1/::1) must never fall through this bypass just
+  // because the desktop app forgot to configure ADMIN_PASSWORD, or anyone
+  // who finds the tunnel URL gets in with no auth at all.
+  if (process.env.DESKTOP_MODE === '1' && !process.env.ADMIN_PASSWORD) {
+    const host = resolveHost(req.headers, req.nextUrl.host)
+    if (isLoopbackHost(host)) return NextResponse.next()
+    return new NextResponse('Forbidden: set ADMIN_PASSWORD before exposing this app via a tunnel', { status: 403 })
+  }
 
   const { pathname } = req.nextUrl
   if (PUBLIC_PATTERNS.some(p => p.test(pathname))) return NextResponse.next()

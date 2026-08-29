@@ -47,6 +47,7 @@
     ]
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
     "electron-updater": "^6.3.9",
     "get-port": "^5.1.1"
   },

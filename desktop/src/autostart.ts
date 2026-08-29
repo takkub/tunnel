@@ -4,6 +4,7 @@
 import { spawn } from 'child_process'
 import path from 'path'
 import { TUNNEL_ROOT, TUNNEL_DATA_DIR } from './server'
+import { buildSpawnEnv } from './dotenv-env'
 
 export interface AutostartSummary {
   mode: string
@@ -17,7 +18,7 @@ export function runAutostartTunnels(): Promise<AutostartSummary> {
     const scriptPath = path.join(TUNNEL_ROOT, 'scripts', 'autostart.js')
     const proc = spawn(process.execPath, [scriptPath, '--json'], {
       cwd: TUNNEL_DATA_DIR,
-      env: { ...process.env, CI: '1', TUNNEL_ROOT, TUNNEL_DATA_DIR, ELECTRON_RUN_AS_NODE: '1' },
+      env: buildSpawnEnv(TUNNEL_DATA_DIR, { CI: '1', TUNNEL_ROOT, TUNNEL_DATA_DIR, ELECTRON_RUN_AS_NODE: '1' }),
     })
 
     let stdout = ''
