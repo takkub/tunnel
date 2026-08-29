@@ -10,9 +10,18 @@ const path = require('path');
 const { ROOT, DATA_DIR, getRuntimeDir, spawnDetached, killDetached } = require('./runtime');
 
 // Loaded after runtime.js resolves DATA_DIR, so a packaged/relocated data dir
-// still finds its own .env. Values land in process.env for the spawn below to
-// inherit — never read or logged directly here, so no secret ever hits stdout.
-try { require('dotenv').config({ path: path.join(DATA_DIR, '.env') }); } catch {}
+// still finds its own .env. Values land in process.env AND get captured into
+// dotenvVars below — never read or logged directly here, so no secret ever
+// hits stdout. dotenvVars is threaded explicitly into the spawn's env in
+// start(): spawnDetached's WMI path (the default on win32) does not inherit
+// this process's process.env at all, only the explicit env object passed to
+// it — a plain "it's in process.env" would silently spawn the server with no
+// ADMIN_PASSWORD/SESSION_SECRET and every login would 401.
+let dotenvVars = {};
+try {
+  const parsed = require('dotenv').config({ path: path.join(DATA_DIR, '.env') }).parsed;
+  if (parsed) dotenvVars = parsed;
+} catch {}
 
 const NAME = 'web';
 const DEFAULT_PORT = 8888;
@@ -71,6 +80,7 @@ function start(port = DEFAULT_PORT) {
   const pid = spawnDetached(process.execPath, [serverJs], {
     cwd: path.dirname(serverJs),
     env: {
+      ...dotenvVars,
       PORT: String(port),
       HOSTNAME: '127.0.0.1',
       NODE_ENV: 'production',

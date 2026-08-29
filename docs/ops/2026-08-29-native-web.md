@@ -161,3 +161,61 @@ app's own launch-at-login/autostart flow — they'll die the next time that pane
 scheduled-task/service wrapper like the one used here, or (b) fix cockpit's cleanup to
 not tree-kill intentionally-detached descendants — (b) is the more correct general fix
 but is outside this project (cockpit-level change).
+
+## 2026-08-29 (later) — rolled to `main` HEAD `5f0af38`, via the new official `web:start` path
+
+Since the report above, dev shipped a proper fix upstream of the scratch launcher used that
+day: `scripts/web-serve.js` (`npm run web:start`/`web:stop`/`web:status`, standalone
+`server.js`, `runtime/web/.pid`+`.log`) plus `scripts/runtime.js`'s `spawnDetached()` now
+launches via **WMI `Win32_Process.Create`** by default on win32 — a SYSTEM-hosted provider
+process (`WmiPrvSE.exe`) creates the child, so it's never a descendant of the pane's own
+process tree at all (no scheduled-task workaround needed anymore; see `runtime.js:264-350`
+for the full rationale, confirmed empirically again below). `middleware.ts`'s
+`localhost:8888` redirect bug (see above) was also fixed in `1f76078`.
+
+**Steps run:**
+1. `npm --prefix web run build` — standalone output rebuilt, succeeded.
+2. `node scripts/web-serve.js stop` (old pid `57564`, the scratch-launcher process from
+   the report above) — confirmed port 8888 free (only a `TIME_WAIT` remnant).
+3. `npm run web:start` — new pid file wrote `45908`. Downtime (stop timestamp → new
+   listener up) was **~4s**, well under the 30s target.
+
+**Bug found and fixed:** first `web:start` came up but **every login 401'd**
+(`{"error":"Unauthorized"}`) regardless of password. Root cause: `web-serve.js`'s old
+comment claimed `.env` values "land in `process.env` for the spawn below to inherit" —
+true only for the plain-`spawn` fallback (which does `{ ...process.env, ...env }`), **not**
+for the WMI path, which only forwards the explicit 5-key `env` object
+(`PORT`/`HOSTNAME`/`NODE_ENV`/`TUNNEL_ROOT`/`TUNNEL_DATA_DIR`) via a `set K=V &&` chain —
+`WmiPrvSE.exe` runs as SYSTEM and does not inherit our process's env at all. So the spawned
+server had `ADMIN_PASSWORD`/`SESSION_SECRET`/`CLOUDFLARE_API_TOKEN`/`ZONE_ID` all undefined,
+and `api/auth/login/route.ts`'s `if (!expected || ...)` 401'd unconditionally.
+
+Fix (`scripts/web-serve.js`): capture `dotenv.config(...).parsed` into `dotenvVars` and
+spread it into the `env` object passed to `spawnDetached()`, so the WMI path gets the
+secrets explicitly instead of relying on ambient inheritance that doesn't happen. Rebuilt
+via `node scripts/web-serve.js stop && npm run web:start` (new pid `36008`) and
+re-verified — see table below. Not committed by this pane (devops role does not commit;
+flagged for Lead/dev to review and merge).
+
+**Verification (this pass, all via `curl`/Node `https`, password never printed):**
+
+| Check | Result |
+|---|---|
+| `node scripts/web-serve.js status` before → after | `{running:true,pid:57564}` → `{running:false}` → `{running:true,pid:36008,port:8888}` |
+| `http://127.0.0.1:8888/` (local) | `307` → `http://localhost:8888/login` |
+| `http://127.0.0.1:8888/login` (local) | `200` |
+| `https://tunnels.sabuytube.xyz/` (public) | `307`, `Location: https://tunnels.sabuytube.xyz/login` — **public host now, not `localhost`** (confirms `1f76078`'s middleware fix is live) |
+| `https://tunnels.sabuytube.xyz/login` (public) | `200` |
+| `POST /api/auth/login` with real `ADMIN_PASSWORD` (public), after the env-forward fix | `200 {"ok":true}`, `Set-Cookie: tunnel_session=...` |
+| `GET /` with that session cookie (public) | `200` (dashboard, not redirected) |
+| cloudflared process count | `10` before and after — unchanged |
+
+**Process-tree detach re-confirmed:** new listener pid `36008`'s actual OS-level chain is
+`node.exe` (the real server) ← `cmd.exe` (WMI's intermediate — the pid `web-serve.js`
+records) ← `WmiPrvSE.exe`. No ancestor is this pane's shell/agent process, so `takkub done`
+closing this pane will not tree-kill it (same guarantee item 4 above worked out for the
+scheduled-task approach; WMI gives the same property without needing schtasks
+create/run/delete at all).
+
+**cloudflared:** all 10 processes (9 tunnels + `oooo`'s 2nd) confirmed still running,
+untouched, before and after this rollout.
