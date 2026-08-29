@@ -216,6 +216,10 @@ function nativeRunning(name, processes) {
   return processes.some(p => p.cmdline.includes(fragment) || p.cmdline.includes(fragmentFwd));
 }
 
+// Filenames that live in a tunnel dir but are never a credentials file —
+// excluded from resolveCredentialsFile's glob fallback below.
+const NON_CREDENTIAL_JSON_FILES = new Set(['tunnel.json', 'auth-gate.json']);
+
 // Resolve local credentials file for a tunnel (bypasses docker-only path in config.yml)
 function resolveCredentialsFile(tunnelDir, configPath) {
   // Try tunnel ID from config.yml first
@@ -227,8 +231,8 @@ function resolveCredentialsFile(tunnelDir, configPath) {
       if (fs.existsSync(candidate)) return candidate;
     }
   } catch {}
-  // Fallback: glob *.json excluding cert.pem
-  const entries = fs.readdirSync(tunnelDir).filter(f => f.endsWith('.json'));
+  // Fallback: glob *.json excluding cert.pem and known non-credential metadata files
+  const entries = fs.readdirSync(tunnelDir).filter(f => f.endsWith('.json') && !NON_CREDENTIAL_JSON_FILES.has(f));
   if (entries.length === 1) return path.join(tunnelDir, entries[0]);
   if (entries.length > 1) return path.join(tunnelDir, entries[0]); // best effort
   return null;

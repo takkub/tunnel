@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { getDockerContainerNames, getCloudflaredProcesses, nativeRunning, TUNNELS_DIR } = require('./runtime');
 const { readState: readAuthGateState } = require('./auth-gate');
+const { getAutostart } = require('./tunnel-meta');
 
 const filterName = process.argv[2] || null;
 
@@ -48,6 +49,7 @@ const tunnels = folders.map(name => ({
   hostname: getHostnameFromConfig(name),
   port: getPortFromConfig(name),
   authGate: { enabled: !!readAuthGateState(name).enabled },
+  autostart: getAutostart(name),
 }));
 
 console.log(JSON.stringify({ tunnels }, null, 2));

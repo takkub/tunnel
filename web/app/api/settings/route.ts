@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCloudflareSettings, setCloudflareSettings } from '@/lib/settings'
+import { getCloudflareSettings, setCloudflareSettings, getDesktopSettings, setDesktopSettings } from '@/lib/settings'
 import { getCloudflaredStatus } from '@/lib/cloudflared'
 import { isDockerAvailable, getRuntimeMode, getEffectiveMode, setRuntimeMode } from '@/lib/runtime'
 import { TUNNEL_DATA_DIR } from '@/lib/paths'
@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 function buildSettings() {
   return {
     cloudflare: getCloudflareSettings(),
+    desktop: getDesktopSettings(),
     runtime: {
       mode: getRuntimeMode(),
       effectiveMode: getEffectiveMode(),
@@ -32,6 +33,13 @@ export async function PUT(req: Request) {
       setCloudflareSettings({
         apiToken: body.cloudflare.apiToken,
         zoneId: body.cloudflare.zoneId,
+      })
+    }
+
+    if (body.desktop) {
+      setDesktopSettings({
+        launchAtLogin: body.desktop.launchAtLogin,
+        autostartTunnelsOnLaunch: body.desktop.autostartTunnelsOnLaunch,
       })
     }
 

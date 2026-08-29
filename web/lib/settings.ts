@@ -8,7 +8,8 @@ import { TUNNEL_DATA_DIR } from './paths'
 const SETTINGS_FILE = path.join(TUNNEL_DATA_DIR, 'settings.json')
 
 interface StoredCloudflare { apiToken?: string; zoneId?: string }
-interface StoredSettings { cloudflare?: StoredCloudflare }
+interface StoredDesktop { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean }
+interface StoredSettings { cloudflare?: StoredCloudflare; desktop?: StoredDesktop }
 
 function readRaw(): StoredSettings {
   try {
@@ -64,4 +65,25 @@ export function setCloudflareSettings(update: { apiToken?: string; zoneId?: stri
   }
   writeRaw({ ...raw, cloudflare })
   return getCloudflareSettings()
+}
+
+const DESKTOP_DEFAULTS: Required<StoredDesktop> = { launchAtLogin: false, autostartTunnelsOnLaunch: true }
+
+export interface DesktopSettingsView {
+  launchAtLogin: boolean
+  autostartTunnelsOnLaunch: boolean
+}
+
+export function getDesktopSettings(): DesktopSettingsView {
+  return { ...DESKTOP_DEFAULTS, ...readRaw().desktop }
+}
+
+// Omit a key entirely to leave it untouched.
+export function setDesktopSettings(update: { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean }): DesktopSettingsView {
+  const raw = readRaw()
+  const desktop: StoredDesktop = { ...DESKTOP_DEFAULTS, ...raw.desktop }
+  if (update.launchAtLogin !== undefined) desktop.launchAtLogin = Boolean(update.launchAtLogin)
+  if (update.autostartTunnelsOnLaunch !== undefined) desktop.autostartTunnelsOnLaunch = Boolean(update.autostartTunnelsOnLaunch)
+  writeRaw({ ...raw, desktop })
+  return getDesktopSettings()
 }
