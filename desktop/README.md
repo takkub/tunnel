@@ -20,7 +20,22 @@ needs `npm install --prefix desktop` before `npm --prefix desktop run dist`.
 | `TUNNEL_DATA_DIR` | `app.getPath('userData')` | repo root |
 | `SESSION_SECRET` | auto-generated once, persisted at `TUNNEL_DATA_DIR/.session-secret` | same |
 | `DESKTOP_MODE` | `1` | `1` |
+| `PORT` | see "Fixed port" below | same |
 | `ADMIN_PASSWORD`, `CLOUDFLARE_API_TOKEN`, `ZONE_ID`, ... | read from `TUNNEL_DATA_DIR/.env` if present | same |
+
+### Fixed port
+
+By default the spawned server binds to the first free port from
+`[8888, 8889, 8890, 8891, 8892]` (`get-port`). Set **`TUNNEL_WEB_PORT`** (env,
+read by the Electron main process itself — not `.env`) or **`desktop.webPort`**
+in `<TUNNEL_DATA_DIR>/settings.json` (env wins if both are set) to pin it to a
+specific port instead — needed when a Cloudflare tunnel's ingress rule points
+at a fixed `localhost:<port>`, since landing on a different port after a
+restart 502s the tunnel. If the configured port is still occupied by the
+previous process's listener, `src/server.ts` retries 5 times, 2s apart,
+logging each attempt, before falling back to `get-port`. See
+`src/port-resolver.js` (plain, electron-free — `npm test` in `desktop/`) for
+the resolution logic.
 
 `web/lib/paths.ts` reads `TUNNEL_ROOT`/`TUNNEL_DATA_DIR` with a dev fallback
 of `path.resolve(process.cwd(), '..')`, so the browser dev flow (`npm run

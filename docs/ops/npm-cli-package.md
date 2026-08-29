@@ -1,4 +1,4 @@
-# npm CLI package — `@takkub/tunnel`
+# npm CLI package — `tunnel-takkub`
 
 The `tunnel` command is the same `scripts/*.js` automation this repo already uses,
 packaged as a global npm install. It bundles a pre-built Next.js `standalone`
@@ -47,8 +47,8 @@ npm publish --access public    # from the repo root; prepack builds web/ automat
 To test a release candidate without touching the real registry:
 
 ```bash
-npm pack                                    # writes @takkub/tunnel-<version>.tgz, runs prepack
-npm install -g --prefix /tmp/some-prefix ./takkub-tunnel-<version>.tgz
+npm pack                                    # writes tunnel-takkub-<version>.tgz, runs prepack
+npm install -g --prefix /tmp/some-prefix ./tunnel-takkub-<version>.tgz
 TUNNEL_DATA_DIR=/tmp/some-data /tmp/some-prefix/bin/tunnel web --port 8897 --no-open
 ```
 

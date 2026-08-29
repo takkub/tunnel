@@ -67,19 +67,21 @@ function setCloudflareSettings(update = {}) {
   return getCloudflareSettings();
 }
 
-const DESKTOP_DEFAULTS = { launchAtLogin: false, autostartTunnelsOnLaunch: true };
+const DESKTOP_DEFAULTS = { launchAtLogin: false, autostartTunnelsOnLaunch: true, webPort: null };
 
 function getDesktopSettings() {
   const raw = readRaw();
   return { ...DESKTOP_DEFAULTS, ...(raw.desktop || {}) };
 }
 
-// Omit a key entirely to leave it untouched.
+// Omit a key entirely to leave it untouched. Pass webPort as 0/null/'' to
+// clear the override and fall back to TUNNEL_WEB_PORT/get-port again.
 function setDesktopSettings(update = {}) {
   const raw = readRaw();
   const desktop = { ...DESKTOP_DEFAULTS, ...(raw.desktop || {}) };
   if (update.launchAtLogin !== undefined) desktop.launchAtLogin = Boolean(update.launchAtLogin);
   if (update.autostartTunnelsOnLaunch !== undefined) desktop.autostartTunnelsOnLaunch = Boolean(update.autostartTunnelsOnLaunch);
+  if (update.webPort !== undefined) desktop.webPort = update.webPort ? Number(update.webPort) : null;
   writeRaw({ ...raw, desktop });
   return getDesktopSettings();
 }

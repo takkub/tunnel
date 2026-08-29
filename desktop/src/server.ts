@@ -1,9 +1,11 @@
 import { ChildProcess, spawn } from 'child_process'
 import { app } from 'electron'
 import fs from 'fs'
+import net from 'net'
 import path from 'path'
 import getPort from 'get-port'
 import { buildSpawnEnv } from './dotenv-env'
+import { resolveConfiguredPort, acquirePort } from './port-resolver'
 
 // Where scripts/ lives — read-only in a packaged app, the repo root in dev.
 export const TUNNEL_ROOT = app.isPackaged
@@ -16,6 +18,45 @@ export const TUNNEL_ROOT = app.isPackaged
 export const TUNNEL_DATA_DIR = app.isPackaged
   ? app.getPath('userData')
   : path.resolve(__dirname, '..', '..')
+
+// Mirrors settings.ts's direct read of <TUNNEL_DATA_DIR>/settings.json — see
+// scripts/settings-store.js / web/lib/settings.ts for the canonical shape.
+function readSettingsWebPort(): number | undefined {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(TUNNEL_DATA_DIR, 'settings.json'), 'utf8'))
+    return raw?.desktop?.webPort
+  } catch {
+    return undefined
+  }
+}
+
+function isPortFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+  return new Promise(resolve => {
+    const tester = net.createServer()
+    tester.once('error', () => resolve(false))
+    tester.once('listening', () => tester.close(() => resolve(true)))
+    tester.listen(port, host)
+  })
+}
+
+// TUNNEL_WEB_PORT (env) or settings.json's desktop.webPort pins the server to
+// a fixed port — needed because a Cloudflare tunnel's ingress rule points at
+// a fixed localhost port (e.g. 8888): if a restart lands on 8889 instead
+// (get-port's default behavior when 8888 is briefly still held by the
+// previous process), the tunnel starts 502ing. Retries a few times before
+// falling back to get-port, since the old process's listener can take a
+// moment to release the port after exit.
+async function resolvePort(): Promise<number> {
+  const configuredPort = resolveConfiguredPort({
+    envPort: process.env.TUNNEL_WEB_PORT,
+    settingsWebPort: readSettingsWebPort(),
+  })
+  return acquirePort(configuredPort, {
+    isPortFree,
+    getFallbackPort: () => getPort({ port: [8888, 8889, 8890, 8891, 8892] }),
+    log: (msg: string) => console.error(msg),
+  })
+}
 
 function loadOrCreateSessionSecret(): string {
   const file = path.join(TUNNEL_DATA_DIR, '.session-secret')
@@ -34,7 +75,7 @@ function loadOrCreateSessionSecret(): string {
 let serverProcess: ChildProcess | null = null
 
 export async function startServer(): Promise<{ port: number; url: string }> {
-  const port = await getPort({ port: [8888, 8889, 8890, 8891, 8892] })
+  const port = await resolvePort()
   const sessionSecret = loadOrCreateSessionSecret()
 
   // <TUNNEL_DATA_DIR>/.env holds ADMIN_PASSWORD/CLOUDFLARE_API_TOKEN/ZONE_ID

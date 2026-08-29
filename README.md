@@ -3,7 +3,7 @@
 ## ติดตั้งผ่าน npm
 
 ```bash
-npm install -g @takkub/tunnel
+npm install -g tunnel-takkub
 tunnel setup          # opens the setup wizard in your browser (installs cloudflared, sets up your token/zone/password)
 tunnel web            # start the web admin dashboard on http://localhost:8888
 tunnel create my-app my-app.example.com 3000

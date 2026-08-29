@@ -8,7 +8,8 @@
     "dev": "tsc -p tsconfig.json && cross-env NODE_ENV=development electron .",
     "build": "npm --prefix ../web install --no-audit --no-fund && npm --prefix ../web run build && node scripts/copy-standalone.js && tsc -p tsconfig.json",
     "dist": "npm run build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test": "node --test src/__tests__/*.test.js"
   },
   "build": {
     "appId": "com.takkub.tunnel",

@@ -51,9 +51,18 @@ export async function PUT(req: Request) {
     }
 
     if (body.desktop) {
+      if (
+        body.desktop.webPort !== undefined &&
+        body.desktop.webPort !== null &&
+        body.desktop.webPort !== 0 &&
+        (!Number.isInteger(body.desktop.webPort) || body.desktop.webPort < 1 || body.desktop.webPort > 65535)
+      ) {
+        return NextResponse.json({ error: 'desktop.webPort must be an integer between 1 and 65535, or 0/null to clear it' }, { status: 400 })
+      }
       setDesktopSettings({
         launchAtLogin: body.desktop.launchAtLogin,
         autostartTunnelsOnLaunch: body.desktop.autostartTunnelsOnLaunch,
+        webPort: body.desktop.webPort,
       })
     }
 

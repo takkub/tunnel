@@ -1,5 +1,5 @@
 {
-  "name": "@takkub/tunnel",
+  "name": "tunnel-takkub",
   "version": "1.0.0",
   "description": "Cloudflare Tunnel Management Scripts",
   "main": "dist/index.js",
