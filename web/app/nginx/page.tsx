@@ -152,7 +152,7 @@ export default function NginxPage() {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-4">
+    <div className="space-y-4">
       {/* Header */}
       <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
         <h2 className="font-semibold text-zinc-200 mb-1">Nginx Reverse Proxy</h2>
@@ -202,7 +202,7 @@ export default function NginxPage() {
         ) : sites.length === 0 ? (
           <p className="text-sm text-zinc-500">ยังไม่มี site — เพิ่มด้านล่าง</p>
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
             {sites.map(s => (
               <li key={s.serverName} className="rounded-xl bg-zinc-900 border border-zinc-700 overflow-hidden">
                 <div className="flex items-center justify-between gap-3 px-3 py-2.5">

@@ -247,7 +247,7 @@ export default function DashboardPage() {
 
       {/* Tunnel list */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3" aria-busy="true">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3" aria-busy="true">
           {[1, 2, 3].map(i => (
             <div key={i} className="bg-[#18181b] border border-zinc-800 rounded-2xl p-4 animate-pulse space-y-3">
               <div className="flex items-center justify-between">
@@ -286,7 +286,7 @@ export default function DashboardPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
           {filteredTunnels.map(t => (
             <TunnelCard key={t.name} tunnel={t} health={healthMap[t.name]} onRefresh={fetchTunnels} onToast={showToast} />
           ))}

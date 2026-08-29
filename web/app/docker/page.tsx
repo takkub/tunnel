@@ -172,7 +172,7 @@ export default function DockerPage() {
   ]
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-4">
+    <div className="space-y-4">
       {logTarget && <LogPanel container={logTarget} onClose={() => setLogTarget(null)} />}
 
       {/* Header */}
@@ -231,7 +231,7 @@ export default function DockerPage() {
             {containers.length === 0 ? 'ไม่พบ container' : search ? `ไม่พบ container ที่ตรงกับ "${search}"` : 'ไม่มี container ในหมวดนี้'}
           </p>
         ) : (
-          <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
             {filteredContainers.map(c => {
               const running = c.state === 'running'
               return (
