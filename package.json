@@ -1,8 +1,25 @@
 {
-  "name": "tunnel",
+  "name": "@takkub/tunnel",
   "version": "1.0.0",
   "description": "Cloudflare Tunnel Management Scripts",
   "main": "dist/index.js",
+  "bin": {
+    "tunnel": "bin/tunnel.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/*.js",
+    "web/.next/standalone/",
+    "web/.next/static/",
+    "web/public/",
+    "docs/ops/npm-cli-package.md",
+    ".env.example",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "web": "cd web && node node_modules/next/dist/bin/next build && node node_modules/next/dist/bin/next start -p 8888",
     "web:dev": "cd web && node node_modules/next/dist/bin/next dev",
@@ -27,7 +44,8 @@
     "delete:force": "node scripts/force-delete-tunnel.js",
     "delete:quick": "node scripts/quick-delete-tunnel.js",
     "desktop:dev": "npm --prefix desktop run dev",
-    "desktop:dist": "npm --prefix desktop run dist"
+    "desktop:dist": "npm --prefix desktop run dist",
+    "prepack": "npm --prefix web install && npm --prefix web run build"
   },
   "dependencies": {
     "dotenv": "^17.2.3"
@@ -35,5 +53,7 @@
   "devDependencies": {
     "typescript": "^5.5.3"
   },
-  "private": true
+  "publishConfig": {
+    "access": "public"
+  }
 }

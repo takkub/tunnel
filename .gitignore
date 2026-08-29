@@ -131,7 +131,10 @@ web-verify.err
 # Runtime state
 /runtime/
 /tunnels/
-/bin/
+/bin/*
+# ...except the npm CLI entry point checked into the repo (cloudflared-bin.js
+# still downloads the real binary into this same /bin/ dir at runtime).
+!/bin/tunnel.js
 
 # Tooling
 .claude/
