@@ -90,6 +90,7 @@ export async function startServer(): Promise<{ port: number; url: string }> {
     TUNNEL_ROOT,
     TUNNEL_DATA_DIR,
     SESSION_SECRET: process.env.SESSION_SECRET || sessionSecret,
+    APP_VERSION: app.getVersion(),
   })
 
   if (app.isPackaged) {

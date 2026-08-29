@@ -3,6 +3,7 @@ import { getCloudflareSettings, setCloudflareSettings, getDesktopSettings, setDe
 import { getCloudflaredStatus } from '@/lib/cloudflared'
 import { isDockerAvailable, getRuntimeMode, getEffectiveMode, setRuntimeMode } from '@/lib/runtime'
 import { TUNNEL_DATA_DIR } from '@/lib/paths'
+import { getAppVersion } from '@/lib/version'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,7 @@ function buildSettings() {
       desktopMode: Boolean(process.env.DESKTOP_MODE),
     },
     cloudflared: getCloudflaredStatus(),
+    appVersion: getAppVersion(),
   }
 }
 
