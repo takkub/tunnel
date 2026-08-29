@@ -8,6 +8,16 @@ import CopyButton from '@/components/CopyButton'
 type RuntimeMode = 'auto' | 'docker' | 'native'
 interface DomainEntry { domain: string; zoneId: string }
 
+type UpdateState = 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'downloaded' | 'error'
+interface UpdateStatus {
+  state: UpdateState
+  version: string | null
+  currentVersion: string | null
+  percent: number | null
+  message: string | null
+  at: number | null
+}
+
 interface SettingsResponse {
   cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; zoneName?: string | null; accountEmail?: string }
   desktop: { launchAtLogin: boolean; autostartTunnelsOnLaunch: boolean }
@@ -305,6 +315,49 @@ export default function SettingsPage() {
     fetchReqs()
     fetchDomains()
   }, [])
+
+  // ---- Desktop app update ----
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const updatePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchUpdateStatus = async () => {
+    try {
+      const res = await fetch('/api/desktop/update')
+      if (res.ok) setUpdateStatus(await res.json())
+    } catch { /* desktop app not running this endpoint */ }
+  }
+
+  useEffect(() => {
+    if (!settings?.runtime.desktopMode) return
+    fetchUpdateStatus()
+    updatePollRef.current = setInterval(fetchUpdateStatus, 2000)
+    return () => { if (updatePollRef.current) clearInterval(updatePollRef.current) }
+  }, [settings?.runtime.desktopMode])
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true)
+    try {
+      await fetch('/api/desktop/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check' }),
+      })
+      await fetchUpdateStatus()
+    } catch { showToast('ไม่สามารถตรวจสอบอัปเดตได้', 'error') }
+    finally { setCheckingUpdate(false) }
+  }
+
+  const handleInstallUpdate = async () => {
+    try {
+      await fetch('/api/desktop/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'install' }),
+      })
+      showToast('กำลังรีสตาร์ทเพื่อติดตั้งอัปเดต…', 'success')
+    } catch { showToast('ไม่สามารถรีสตาร์ทได้', 'error') }
+  }
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-4">
@@ -736,11 +789,54 @@ export default function SettingsPage() {
       </section>
 
       {/* App info */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">App</h2>
           <span className="text-xs text-zinc-500 font-mono">v{settings?.appVersion ?? '?'}</span>
         </div>
+
+        {settings?.runtime.desktopMode ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-zinc-500">
+              {updateStatus?.state === 'checking' && 'กำลังตรวจสอบอัปเดต…'}
+              {updateStatus?.state === 'up-to-date' && 'เป็นเวอร์ชันล่าสุดแล้ว'}
+              {updateStatus?.state === 'available' && `พบเวอร์ชันใหม่ v${updateStatus.version} — กำลังดาวน์โหลด…`}
+              {updateStatus?.state === 'downloading' && `กำลังดาวน์โหลด v${updateStatus.version ?? ''}… ${updateStatus.percent ?? 0}%`}
+              {updateStatus?.state === 'downloaded' && `พร้อมติดตั้ง v${updateStatus.version}`}
+              {updateStatus?.state === 'error' && (
+                <span className="text-red-400">ตรวจสอบอัปเดตไม่สำเร็จ: {updateStatus.message}</span>
+              )}
+              {(!updateStatus || updateStatus.state === 'idle') && ' '}
+            </p>
+            {updateStatus?.state === 'downloaded' ? (
+              <Button onClick={handleInstallUpdate} variant="success" className="!min-h-0 !py-2 !px-4 text-xs">
+                รีสตาร์ทเพื่ออัปเดต
+              </Button>
+            ) : (
+              <Button
+                onClick={handleCheckUpdate}
+                loading={checkingUpdate || updateStatus?.state === 'checking'}
+                disabled={updateStatus?.state === 'downloading' || updateStatus?.state === 'available'}
+                variant="secondary"
+                className="!min-h-0 !py-2 !px-4 text-xs"
+              >
+                ตรวจสอบอัปเดต
+              </Button>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">
+            ดูเวอร์ชันล่าสุดได้ที่{' '}
+            <a
+              href="https://github.com/takkub/tunnel/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-orange-400 hover:underline"
+            >
+              GitHub Releases
+            </a>
+          </p>
+        )}
       </section>
       </div>
     </div>

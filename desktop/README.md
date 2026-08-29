@@ -91,6 +91,35 @@ macOS 13 (Ventura) — Apple's replacement Login Items API doesn't expose a
 may briefly show the window before the app can react. `openAtLogin` itself
 still works as a per-user login item on an unsigned build.
 
+## Checking for updates
+
+`electron-updater` auto-checks (and silently downloads) on every launch via
+`src/updater.ts`'s `checkForUpdates()`. Two more ways to trigger it, both
+routed through the same module since there's no IPC channel to the web UI:
+
+- **Tray → "Check for Updates…"** calls `checkForUpdatesManual()` directly and
+  shows the result as a tray balloon/OS notification (unlike the silent
+  auto-check).
+- **Settings page → App box** (desktop mode only) posts
+  `{ action: 'check' }` to `POST /api/desktop/update`, which writes
+  `<TUNNEL_DATA_DIR>/update-request.json`; `pollUpdateRequests()` polls that
+  file's mtime every ~2s (same pattern as `src/settings.ts`'s
+  `watchDesktopSettings`) and runs the check. A plain web browser (not the
+  desktop app) shows a link to GitHub Releases instead of this button.
+
+Every `autoUpdater` event — `checking-for-update`, `update-available`,
+`update-not-available`, `download-progress`, `update-downloaded`, `error` —
+is logged to the console and mirrored into
+`<TUNNEL_DATA_DIR>/update-status.json` (`{ state, version, currentVersion,
+percent, message, at }`), which `GET /api/desktop/update` reads back for the
+Settings page to poll while a check/download is in flight. Once a download
+finishes, a dialog offers "Restart now" (`autoUpdater.quitAndInstall()`) or
+"Later"; the Settings page's "Restart to update" button posts
+`{ action: 'install' }` to reach the same `quitAndInstall()` from the web UI.
+`src/update-status.js` (the shared read/write logic for both files) is
+electron-free and unit-tested directly — see
+`src/__tests__/update-status.test.js`.
+
 ## Signing
 
 Windows and macOS builds are unsigned for now. **TODO:** notarize the macOS
