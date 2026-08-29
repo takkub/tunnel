@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AuthGateModal from './AuthGateModal'
 
 interface Tunnel {
@@ -8,6 +8,7 @@ interface Tunnel {
   hostname?: string
   port?: number | null
   authGate?: { enabled: boolean }
+  autostart?: boolean
 }
 
 interface Props {
@@ -25,9 +26,41 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showAuthGate, setShowAuthGate] = useState(false)
+  const [autostart, setAutostart] = useState(tunnel.autostart ?? false)
+  const [savingAutostart, setSavingAutostart] = useState(false)
 
   const busy = busyAction !== null
   const hasHostname = !!(tunnel.hostname && tunnel.hostname !== 'cfd')
+
+  useEffect(() => {
+    setAutostart(tunnel.autostart ?? false)
+  }, [tunnel.autostart])
+
+  const toggleAutostart = async () => {
+    const next = !autostart
+    setSavingAutostart(true)
+    setAutostart(next)
+    try {
+      const res = await fetch(`/api/tunnels/${tunnel.name}/autostart`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autostart: next }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAutostart(!next)
+        onToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+      } else {
+        onToast(next ? 'เปิด autostart แล้ว' : 'ปิด autostart แล้ว', 'success')
+      }
+    } catch {
+      setAutostart(!next)
+      onToast('ไม่สามารถบันทึกได้', 'error')
+    } finally {
+      setSavingAutostart(false)
+      await onRefresh()
+    }
+  }
 
   const action = async (type: 'start' | 'stop' | 'delete') => {
     setBusyAction(type)
@@ -219,6 +252,32 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0110 0v4" />
             </svg>
+          </button>
+
+          {/* Autostart toggle */}
+          <button
+            onClick={toggleAutostart}
+            disabled={busy || savingAutostart}
+            aria-label="Autostart"
+            aria-pressed={autostart}
+            title="เปิด tunnel นี้อัตโนมัติเมื่อแอปเริ่ม"
+            className={`min-h-[44px] w-11 rounded-lg border text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center ${
+              autostart
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+            }`}
+          >
+            {savingAutostart ? (
+              <span className="w-3 h-3 border-2 border-amber-400/30 border-t-amber-300 rounded-full animate-spin" />
+            ) : autostart ? (
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            )}
           </button>
 
           {/* Delete button */}

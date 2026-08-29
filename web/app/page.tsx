@@ -12,6 +12,7 @@ interface Tunnel {
   hostname?: string
   port?: number | null
   authGate?: { enabled: boolean }
+  autostart?: boolean
 }
 
 type FilterType = 'all' | 'running' | 'stopped'
