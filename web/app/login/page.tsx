@@ -33,7 +33,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm lg:max-w-md">
         <div className="flex items-center gap-3 mb-8 justify-center">
           <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center shadow-glow-orange">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-white">

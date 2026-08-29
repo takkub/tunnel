@@ -201,7 +201,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-5">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 md:px-6 xl:px-8">
           {children}
         </main>
       </div>

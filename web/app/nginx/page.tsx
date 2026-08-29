@@ -152,13 +152,15 @@ export default function NginxPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-4">
+    <div className="max-w-[1400px] mx-auto space-y-4">
       {/* Header */}
       <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
         <h2 className="font-semibold text-zinc-200 mb-1">Nginx Reverse Proxy</h2>
         <p className="text-sm text-zinc-500">Generate nginx config พร้อม deploy — กำหนด site, location, และ options แล้ว export ตาม mode ที่เลือก</p>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3 items-start">
+      <div className="md:col-span-1 space-y-4">
       {/* Export mode */}
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-3">
         <h2 className="font-semibold text-zinc-200">Export Mode</h2>
@@ -184,9 +186,10 @@ export default function NginxPage() {
             : 'สร้างเฉพาะ nginx server block — append เข้า nginx ที่มีอยู่บน edge server แล้ว nginx -s reload'}
         </p>
       </section>
+      </div>
 
       {/* Sites list + add form */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+      <section className="md:col-span-2 bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">Sites</h2>
           <RefreshButton onClick={fetchSites} disabled={loading} loading={loading} />
@@ -199,7 +202,7 @@ export default function NginxPage() {
         ) : sites.length === 0 ? (
           <p className="text-sm text-zinc-500">ยังไม่มี site — เพิ่มด้านล่าง</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {sites.map(s => (
               <li key={s.serverName} className="rounded-xl bg-zinc-900 border border-zinc-700 overflow-hidden">
                 <div className="flex items-center justify-between gap-3 px-3 py-2.5">
@@ -311,6 +314,7 @@ export default function NginxPage() {
           </button>
         </form>
       </section>
+      </div>
 
       {/* Export */}
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
@@ -381,3 +385,4 @@ export default function NginxPage() {
     </div>
   )
 }
+
