@@ -81,7 +81,7 @@ const pageTitles: Record<string, string> = {
   '/setup': 'Setup',
 }
 
-export function ClientLayout({ children }: { children: React.ReactNode }) {
+export function ClientLayout({ children, version }: { children: React.ReactNode; version: string }) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -155,7 +155,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center shadow-glow-orange flex-shrink-0">
             <IconTunnel className="w-4 h-4 text-white" />
           </div>
-          <span className="font-semibold text-zinc-100 text-sm tracking-tight">Tunnel Manager</span>
+          <div className="min-w-0">
+            <div className="font-semibold text-zinc-100 text-sm tracking-tight">Tunnel Manager</div>
+            <div className="text-[10px] text-zinc-500 leading-none">v{version}</div>
+          </div>
         </div>
 
         {/* Nav */}
