@@ -12,7 +12,7 @@ interface Tunnel {
   autostart?: boolean
 }
 
-export type HealthState = 'connected' | 'connecting' | 'degraded' | 'error' | 'stopped'
+export type HealthState = 'connected' | 'connecting' | 'degraded' | 'error' | 'origin-down' | 'stopped'
 
 export interface TunnelHealth {
   name: string
@@ -21,6 +21,7 @@ export interface TunnelHealth {
   activeConnections: number
   connections: { connIndex: number; location: string; protocol: string; since: string }[]
   lastError: { time: string; message: string; hint?: string } | null
+  originError: { time: string; message: string; hint?: string; ageSec: number } | null
   lastEventAt: string
   uptimeSec: number
 }
@@ -45,6 +46,7 @@ const HEALTH_LABEL: Record<HealthState, string> = {
   connecting: 'กำลังเชื่อมต่อ',
   degraded: 'ไม่สมบูรณ์',
   error: 'ผิดพลาด',
+  'origin-down': 'ปลายทางไม่ตอบ',
   stopped: 'หยุด',
 }
 
@@ -53,7 +55,16 @@ const HEALTH_STYLE: Record<HealthState, string> = {
   degraded: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
   connecting: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
   error: 'bg-red-500/10 text-red-400 border border-red-500/20',
+  'origin-down': 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
   stopped: 'bg-zinc-800 text-zinc-500 border border-zinc-700',
+}
+
+function formatAgeSec(sec: number): string {
+  if (sec < 60) return `${Math.max(1, Math.round(sec))} วินาที`
+  const m = Math.round(sec / 60)
+  if (m < 60) return `${m} นาที`
+  const h = Math.round(m / 60)
+  return `${h} ชั่วโมง`
 }
 
 export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props) {
@@ -168,6 +179,7 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
         : healthState === 'degraded' ? 'border-l-[3px] border-l-amber-500'
         : healthState === 'connecting' ? 'border-l-[3px] border-l-blue-500'
         : healthState === 'error' ? 'border-l-[3px] border-l-red-500'
+        : healthState === 'origin-down' ? 'border-l-[3px] border-l-orange-500'
         : ''
     }`}>
       <div className="p-3 space-y-2.5">
@@ -232,6 +244,7 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
                 healthState === 'connected' ? 'bg-emerald-400 animate-pulse-dot'
                   : healthState === 'degraded' ? 'bg-amber-400 animate-pulse-dot'
                   : healthState === 'error' ? 'bg-red-400'
+                  : healthState === 'origin-down' ? 'bg-orange-400'
                   : 'bg-zinc-600'
               }`} />
             )}
@@ -248,6 +261,18 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
         {healthState === 'error' && health?.lastError && (
           <p className="text-xs text-red-400 truncate" title={health.lastError.message}>
             ⚠ {health.lastError.hint ?? health.lastError.message}
+          </p>
+        )}
+
+        {healthState === 'origin-down' && health?.originError && (
+          <p className="text-xs text-orange-400 truncate" title={health.originError.message}>
+            ⚠ {health.originError.hint ?? health.originError.message}
+          </p>
+        )}
+
+        {healthState === 'connected' && health?.originError && (
+          <p className="text-[11px] text-zinc-600 truncate" title={health.originError.message}>
+            origin error ล่าสุด {formatAgeSec(health.originError.ageSec)}ที่แล้ว
           </p>
         )}
 
