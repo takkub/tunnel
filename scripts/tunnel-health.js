@@ -11,7 +11,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const {
   TUNNELS_DIR, getRuntimeDir,
-  dockerStatus, nativeRunning, getCloudflaredProcesses,
+  dockerStatus, nativeRunning, getCloudflaredProcesses, getDockerContainerNames,
 } = require('./runtime');
 const { parseLogText, deriveHealth } = require('./health-log-parser');
 
@@ -81,14 +81,19 @@ function dockerStartedAtSec(name) {
 }
 
 // Shared state (docker container names + native process list) so a multi-tunnel
-// call spawns `docker ps`/process-list once instead of once per tunnel.
+// call spawns `docker ps`/process-list once instead of once per tunnel. A
+// single `docker ps` call is also bounded (getDockerContainerNames() has its
+// own timeout) — critical when Docker Desktop itself is unresponsive: calling
+// the unbounded per-name dockerStatus() once per tunnel used to mean N hangs
+// instead of one, stalling /api/tunnels/health (and the UI's "?/4" badge)
+// until every single tunnel's docker ps call timed out or hung outright.
 function getSharedState() {
-  return { nativeProcesses: getCloudflaredProcesses() };
+  return { nativeProcesses: getCloudflaredProcesses(), dockerNames: getDockerContainerNames() };
 }
 
 function getTunnelHealth(name, shared) {
-  const { nativeProcesses } = shared || getSharedState();
-  const isDocker = dockerStatus(name);
+  const { nativeProcesses, dockerNames } = shared || getSharedState();
+  const isDocker = dockerNames.has(`cloudflared-tunnel-${name}`);
   const isNative = !isDocker && nativeRunning(name, nativeProcesses);
   const running = isDocker || isNative;
 

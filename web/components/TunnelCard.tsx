@@ -2,6 +2,9 @@
 import { useEffect, useState } from 'react'
 import AuthGateModal from './AuthGateModal'
 import TunnelLogModal from './TunnelLogModal'
+import type { HealthState, TunnelHealth } from '@/lib/health'
+
+export type { HealthState, TunnelHealth }
 
 interface Tunnel {
   name: string
@@ -10,20 +13,6 @@ interface Tunnel {
   port?: number | null
   authGate?: { enabled: boolean }
   autostart?: boolean
-}
-
-export type HealthState = 'connected' | 'connecting' | 'degraded' | 'error' | 'origin-down' | 'stopped'
-
-export interface TunnelHealth {
-  name: string
-  running: boolean
-  health: HealthState
-  activeConnections: number
-  connections: { connIndex: number; location: string; protocol: string; since: string }[]
-  lastError: { time: string; message: string; hint?: string } | null
-  originError: { time: string; message: string; hint?: string; ageSec: number } | null
-  lastEventAt: string
-  uptimeSec: number
 }
 
 interface Props {

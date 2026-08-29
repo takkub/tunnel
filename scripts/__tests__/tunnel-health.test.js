@@ -204,6 +204,58 @@ test('tunnel-health.js --all: reports every tunnel in one call', () => {
   assert.ok(tunnels.every(t => t.health === 'stopped'));
 });
 
+// A fake `docker` on PATH that logs every invocation's args to logFile (one
+// line each) and reports a single running container, "cloudflared-tunnel-two".
+function makeFakeDockerBin(logFile) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-fake-docker-'));
+  if (process.platform === 'win32') {
+    fs.writeFileSync(path.join(dir, 'docker.cmd'),
+      `@echo off\r\necho %* >> "${logFile}"\r\necho cloudflared-tunnel-two\r\n`);
+  } else {
+    const shPath = path.join(dir, 'docker');
+    fs.writeFileSync(shPath, `#!/usr/bin/env bash\necho "$@" >> "${logFile}"\necho cloudflared-tunnel-two\n`);
+    fs.chmodSync(shPath, 0o755);
+  }
+  return dir;
+}
+
+test('tunnel-health.js --all: shape matches web/lib/health.ts (TunnelHealthResponse) and docker is queried once, not once per tunnel', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
+  const logFile = path.join(dataDir, 'docker-calls.log');
+  fs.writeFileSync(logFile, '');
+  makeTunnel(dataDir, 'one');
+  makeTunnel(dataDir, 'two');
+
+  const fakeDockerDir = makeFakeDockerBin(logFile);
+  const out = execFileSync(process.execPath, [path.join(root, 'scripts', 'tunnel-health.js'), '--all', '--json'], {
+    encoding: 'utf8',
+    env: { ...process.env, TUNNEL_ROOT: root, TUNNEL_DATA_DIR: dataDir, PATH: `${fakeDockerDir}${path.delimiter}${process.env.PATH}` },
+  });
+  const result = JSON.parse(out);
+
+  // Shape: { tunnels: TunnelHealth[] } — exactly the fields web/lib/health.ts
+  // declares, so the UI's optional-chained reads (health?.activeConnections
+  // etc.) actually find data instead of silently falling through to "?".
+  assert.deepEqual(Object.keys(result), ['tunnels']);
+  assert.equal(result.tunnels.length, 2);
+  const expectedKeys = [
+    'name', 'running', 'health', 'connections', 'activeConnections',
+    'lastError', 'originError', 'lastOriginError', 'lastEventAt', 'pid', 'uptimeSec', 'logPath',
+  ].sort();
+  for (const t of result.tunnels) {
+    assert.deepEqual(Object.keys(t).sort(), expectedKeys);
+  }
+  const two = result.tunnels.find(t => t.name === 'two');
+  assert.equal(two.running, true, '"two" should be reported running (docker container present)');
+
+  // One shared `docker ps` call for the whole --all batch, not one per tunnel —
+  // otherwise an unresponsive Docker Desktop turns into N hangs instead of one
+  // and /api/tunnels/health never resolves (the root cause of the "?/4" badge).
+  const calls = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean);
+  assert.equal(calls.length, 1, `expected exactly 1 docker invocation, got ${calls.length}: ${calls.join(' | ')}`);
+});
+
 test('tunnel-health.js --logs: returns tail lines and the log path', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));

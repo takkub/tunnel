@@ -1,9 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
-import TunnelCard, { TunnelHealth } from '@/components/TunnelCard'
+import TunnelCard from '@/components/TunnelCard'
 import Button from '@/components/Button'
 import Toast from '@/components/Toast'
 import CreateTunnelModal from '@/components/CreateTunnelModal'
+import type { TunnelHealth, TunnelHealthResponse } from '@/lib/health'
 
 interface Tunnel {
   name: string
@@ -39,7 +40,7 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/tunnels/health')
       if (!res.ok) return
-      const data = await res.json()
+      const data: TunnelHealthResponse = await res.json()
       const map: Record<string, TunnelHealth> = {}
       for (const t of data.tunnels ?? []) map[t.name] = t
       setHealthMap(map)

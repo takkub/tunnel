@@ -19,15 +19,26 @@ function childEnv() {
   }
 }
 
-export function runScript(scriptName: string, args: string[] = []): Promise<string> {
+export function runScript(scriptName: string, args: string[] = [], opts: { timeoutMs?: number } = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(TUNNEL_ROOT, 'scripts', scriptName)
     const proc = spawn(NODE_BIN, [scriptPath, ...args], { cwd: TUNNEL_DATA_DIR, env: childEnv() })
     let out = ''
     let err = ''
+    let timedOut = false
+    // Last-resort safety net: every individual step inside these scripts is
+    // meant to be bounded on its own (see delete-tunnel.js's DOCKER_TIMEOUT_MS
+    // / CLOUDFLARED_TIMEOUT_MS), but this catches anything that isn't —
+    // without it, an API route awaiting this promise would hang right along
+    // with the child instead of returning a clear error.
+    const timer = opts.timeoutMs
+      ? setTimeout(() => { timedOut = true; proc.kill('SIGKILL') }, opts.timeoutMs)
+      : null
     proc.stdout.on('data', (d: Buffer) => { out += d.toString() })
     proc.stderr.on('data', (d: Buffer) => { err += d.toString() })
     proc.on('close', code => {
+      if (timer) clearTimeout(timer)
+      if (timedOut) { reject(new Error(`${scriptName} timed out after ${opts.timeoutMs}ms`)); return }
       if (code === 0) resolve(out)
       else reject(new Error(err || out || `Exit ${code}`))
     })
