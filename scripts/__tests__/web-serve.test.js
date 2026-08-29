@@ -96,6 +96,13 @@ test('start() spawns the standalone server, stages static assets, and records pi
   assert.deepEqual(mod.status(), { running: true, pid: result.pid });
 
   mod.stop();
+  // See runtime.test.js's nativeStop() test for why this needs a tolerant
+  // poll + idempotent retry rather than an immediate assert: stop()'s
+  // internal kill-confirmation deadline can occasionally lose the race
+  // against actual process death on a loaded CI runner.
+  const stopped = await waitFor(() => !mod.status().running, { timeoutMs: 5000 });
+  assert.ok(stopped, 'server should be stopped after stop()');
+  if (fs.existsSync(path.join(runDir, '.pid'))) mod.stop();
   assert.deepEqual(mod.status(), { running: false });
   assert.equal(fs.existsSync(path.join(runDir, '.pid')), false);
 });

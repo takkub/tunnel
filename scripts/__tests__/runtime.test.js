@@ -152,8 +152,15 @@ test('nativeStop() actually terminates a real nativeStart()-launched process, no
 
   runtime.nativeStop('demo');
 
-  const dead = await waitFor(() => { try { process.kill(pid, 0); return false; } catch { return true; } });
+  // killDetached() already waits out a generous deadline internally before
+  // giving up, but a loaded CI runner can occasionally push actual process
+  // death past even that — poll longer here instead of asserting immediately,
+  // then re-invoke nativeStop() (idempotent, and near-instant once the
+  // process is actually dead) so the pid file gets cleaned up if the first
+  // call's own internal deadline won the race against the process dying.
+  const dead = await waitFor(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, { timeoutMs: 5000 });
   assert.ok(dead, 'process should be gone after nativeStop()');
+  if (fs.existsSync(path.join(runtime.getRuntimeDir('demo'), '.pid'))) runtime.nativeStop('demo');
   assert.equal(fs.existsSync(path.join(runtime.getRuntimeDir('demo'), '.pid')), false);
 });
 

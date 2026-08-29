@@ -252,8 +252,11 @@ test('tunnel-health.js --all: shape matches web/lib/health.ts (TunnelHealthRespo
   // One shared `docker ps` call for the whole --all batch, not one per tunnel —
   // otherwise an unresponsive Docker Desktop turns into N hangs instead of one
   // and /api/tunnels/health never resolves (the root cause of the "?/4" badge).
+  // `docker logs`/`docker inspect` are still legitimately per-container (only
+  // "two" is docker-mode here, so exactly one of each) — only `ps` is batched.
   const calls = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean);
-  assert.equal(calls.length, 1, `expected exactly 1 docker invocation, got ${calls.length}: ${calls.join(' | ')}`);
+  const psCalls = calls.filter(c => c.trim().startsWith('ps'));
+  assert.equal(psCalls.length, 1, `expected exactly 1 'docker ps' invocation, got ${psCalls.length}: ${calls.join(' | ')}`);
 });
 
 test('tunnel-health.js --logs: returns tail lines and the log path', () => {

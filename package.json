@@ -28,7 +28,7 @@
     "menu": "node scripts/menu.js",
     "start": "docker-compose up -d",
     "stop": "docker-compose down",
-    "test": "node --test scripts/__tests__/*.test.js",
+    "test": "node scripts/run-tests.js",
     "verify": "npm --prefix web run typecheck && npm test",
     "check": "node scripts/check-requirements.js",
     "release": "node scripts/release.js",
