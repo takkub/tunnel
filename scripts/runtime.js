@@ -416,8 +416,11 @@ function killDetached(pid) {
     if (process.platform === 'win32') {
       spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 5000 });
     } else {
-      // Negative pid targets the whole process group (see the `detached` note above).
-      try { process.kill(-pid); } catch { try { process.kill(pid); } catch {} }
+      // Negative pid targets the whole process group (see the `detached` note
+      // above — spawn(detached:true) calls setsid(), making pid its own pgid).
+      // SIGKILL, not the default SIGTERM: uncatchable/unblockable, so the
+      // signal itself is never why a process lingers past the deadline below.
+      try { process.kill(-pid, 'SIGKILL'); } catch { try { process.kill(pid, 'SIGKILL'); } catch {} }
     }
   };
   attempt();
