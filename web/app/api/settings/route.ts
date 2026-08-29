@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server'
-import { getCloudflareSettings, setCloudflareSettings, getDesktopSettings, setDesktopSettings } from '@/lib/settings'
+import { getCloudflareSettings, setCloudflareSettings, getDesktopSettings, setDesktopSettings, getAdminSettings, setAdminPassword } from '@/lib/settings'
 import { getCloudflaredStatus } from '@/lib/cloudflared'
 import { isDockerAvailable, getRuntimeMode, getEffectiveMode, setRuntimeMode } from '@/lib/runtime'
 import { TUNNEL_DATA_DIR } from '@/lib/paths'
 
 export const dynamic = 'force-dynamic'
 
+const MIN_ADMIN_PASSWORD_LENGTH = 8
+
 function buildSettings() {
   return {
     cloudflare: getCloudflareSettings(),
     desktop: getDesktopSettings(),
+    admin: getAdminSettings(),
     runtime: {
       mode: getRuntimeMode(),
       effectiveMode: getEffectiveMode(),
@@ -33,7 +36,18 @@ export async function PUT(req: Request) {
       setCloudflareSettings({
         apiToken: body.cloudflare.apiToken,
         zoneId: body.cloudflare.zoneId,
+        zoneName: body.cloudflare.zoneName,
       })
+    }
+
+    if (body.admin?.password !== undefined) {
+      if (typeof body.admin.password !== 'string' || body.admin.password.length < MIN_ADMIN_PASSWORD_LENGTH) {
+        return NextResponse.json(
+          { error: `admin.password must be a string of at least ${MIN_ADMIN_PASSWORD_LENGTH} characters` },
+          { status: 400 }
+        )
+      }
+      setAdminPassword(body.admin.password)
     }
 
     if (body.desktop) {

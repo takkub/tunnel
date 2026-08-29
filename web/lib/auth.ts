@@ -1,5 +1,11 @@
 // HMAC-signed cookie helpers — works in both Edge Runtime and Node.js 18+
-
+//
+// getSecret() intentionally reads process.env only (never the lazy
+// <TUNNEL_DATA_DIR>/.env reader in web/lib/env-file.ts) because this module
+// is imported by middleware.ts, which Next 14 always runs on the Edge
+// Runtime — no fs access there. web/lib/settings.ts's setAdminPassword()
+// mirrors a freshly-generated SESSION_SECRET onto process.env for this same
+// process, but that mutation isn't guaranteed to reach the Edge sandbox.
 const SECRET_PLACEHOLDERS = new Set(['dev-secret-change-me', 'change-me-to-a-long-random-secret'])
 
 function getSecret(): string {
