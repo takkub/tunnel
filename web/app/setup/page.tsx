@@ -3,8 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Button from '@/components/Button'
 import Toast from '@/components/Toast'
+import ExposeOnlineForm from '@/components/ExposeOnlineForm'
 
 interface Zone { id: string; name: string; status: string }
+
+interface WebStatusResponse {
+  port: number
+  publicTunnel: { name: string; hostname: string | null; running: boolean } | null
+}
 
 interface SettingsResponse {
   cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; zoneName?: string | null; accountEmail?: string }
@@ -75,6 +81,16 @@ export default function SetupPage() {
   const [savingAdmin, setSavingAdmin] = useState(false)
 
   const desktopMode = settings?.runtime.desktopMode ?? false
+
+  // step 5 (optional): expose the dashboard publicly
+  const [webStatus, setWebStatus] = useState<WebStatusResponse | null>(null)
+  useEffect(() => {
+    if (step !== 5) return
+    fetch('/api/web-status')
+      .then(res => (res.ok ? res.json() : null))
+      .then(setWebStatus)
+      .catch(() => { /* web-status API not ready */ })
+  }, [step])
 
   const fetchStatus = async () => {
     try {
@@ -418,6 +434,22 @@ export default function SetupPage() {
                   )
                 })}
               </ul>
+
+              {webStatus && !webStatus.publicTunnel && (
+                <div className="px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 space-y-2">
+                  <p className="text-sm text-zinc-300 font-medium">ทำให้เข้าจากข้างนอกได้ (ไม่บังคับ)</p>
+                  <p className="text-xs text-zinc-500">เปิด tunnel สาธารณะสำหรับหน้าแดชบอร์ดนี้ ทำทีหลังได้จาก Settings</p>
+                  <ExposeOnlineForm
+                    webPort={webStatus.port}
+                    zoneName={settings?.cloudflare.zoneName ?? null}
+                    adminPasswordSet={Boolean(settings?.admin?.passwordSet)}
+                    onExposed={() => {
+                      fetch('/api/web-status').then(res => (res.ok ? res.json() : null)).then(setWebStatus).catch(() => {})
+                    }}
+                  />
+                </div>
+              )}
+
               <Button onClick={() => router.push('/?create=1')} variant="primary" className="w-full">
                 สร้าง tunnel แรก
               </Button>

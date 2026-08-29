@@ -4,6 +4,7 @@ import Button from '@/components/Button'
 import Toast from '@/components/Toast'
 import RefreshButton from '@/components/RefreshButton'
 import CopyButton from '@/components/CopyButton'
+import ExposeOnlineForm from '@/components/ExposeOnlineForm'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
 interface DomainEntry { domain: string; zoneId: string }
@@ -16,6 +17,24 @@ interface UpdateStatus {
   percent: number | null
   message: string | null
   at: number | null
+}
+
+interface WebStatusResponse {
+  port: number
+  localUrl: string
+  desktopMode: boolean
+  publicTunnel: { name: string; hostname: string | null; running: boolean; health: string } | null
+  mode: 'online' | 'local-only'
+  uptimeSec: number
+}
+
+function formatUptime(sec: number): string {
+  if (sec < 60) return `${sec} วินาที`
+  const mins = Math.floor(sec / 60)
+  if (mins < 60) return `${mins} นาที`
+  const hrs = Math.floor(mins / 60)
+  const remMins = mins % 60
+  return remMins ? `${hrs} ชม. ${remMins} นาที` : `${hrs} ชม.`
 }
 
 interface SettingsResponse {
@@ -88,6 +107,39 @@ export default function SettingsPage() {
   const [installing, setInstalling] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
   const loginPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const [webStatus, setWebStatus] = useState<WebStatusResponse | null>(null)
+  const [togglingTunnel, setTogglingTunnel] = useState(false)
+
+  const fetchWebStatus = async () => {
+    try {
+      const res = await fetch('/api/web-status')
+      if (res.ok) setWebStatus(await res.json())
+    } catch { /* web-status API not ready */ }
+  }
+
+  useEffect(() => {
+    fetchWebStatus()
+    const id = setInterval(fetchWebStatus, 15000)
+    return () => clearInterval(id)
+  }, [])
+
+  const handleToggleTunnel = async () => {
+    if (!webStatus?.publicTunnel) return
+    setTogglingTunnel(true)
+    try {
+      const action = webStatus.publicTunnel.running ? 'stop' : 'start'
+      const res = await fetch(`/api/tunnels/${webStatus.publicTunnel.name}/${action}`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'ทำรายการไม่สำเร็จ')
+      showToast(data.message ?? 'สำเร็จ')
+      await fetchWebStatus()
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e), 'error')
+    } finally {
+      setTogglingTunnel(false)
+    }
+  }
 
   const fetchSettings = async () => {
     setSettingsLoading(true)
@@ -374,6 +426,79 @@ export default function SettingsPage() {
           Settings API ยังไม่พร้อมใช้งาน
         </div>
       )}
+
+      {/* Web Server */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-zinc-200">Web Server</h2>
+          {webStatus && (
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className={`w-2 h-2 rounded-full ${webStatus.mode === 'online' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="text-zinc-400">{webStatus.mode === 'online' ? 'Online' : 'Local only'}</span>
+            </span>
+          )}
+        </div>
+
+        {!webStatus ? (
+          <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
+        ) : (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
+                <p className="text-xs text-zinc-500 mb-1">ที่อยู่ในเครื่อง</p>
+                <div className="flex items-center gap-2">
+                  <a href={webStatus.localUrl} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-mono text-zinc-200 truncate hover:text-orange-400">
+                    {webStatus.localUrl}
+                  </a>
+                  <CopyButton value={webStatus.localUrl} />
+                </div>
+              </div>
+              <div className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
+                <p className="text-xs text-zinc-500 mb-1">ที่อยู่สาธารณะ</p>
+                {webStatus.publicTunnel ? (
+                  <div className="flex items-center gap-2">
+                    <a href={`https://${webStatus.publicTunnel.hostname}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-mono text-zinc-200 truncate hover:text-orange-400">
+                      {webStatus.publicTunnel.hostname}
+                    </a>
+                    <CopyButton value={`https://${webStatus.publicTunnel.hostname}`} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500">ยังไม่ได้เปิดให้เข้าจากอินเทอร์เน็ต</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
+              <p className="text-xs text-zinc-500">ทำงานมาแล้ว {formatUptime(webStatus.uptimeSec)}</p>
+              {webStatus.publicTunnel && (
+                <Button
+                  onClick={handleToggleTunnel}
+                  disabled={togglingTunnel}
+                  loading={togglingTunnel}
+                  variant={webStatus.publicTunnel.running ? 'danger-outline' : 'success-outline'}
+                  className="!min-h-0 !py-1.5 !px-3 text-xs"
+                >
+                  {webStatus.publicTunnel.running ? 'หยุดการเชื่อมต่อสาธารณะ' : 'เริ่มการเชื่อมต่อสาธารณะ'}
+                </Button>
+              )}
+            </div>
+
+            {!webStatus.publicTunnel && (
+              <ExposeOnlineForm
+                webPort={webStatus.port}
+                zoneName={settings?.cloudflare.zoneName ?? null}
+                adminPasswordSet={Boolean(settings?.admin?.passwordSet)}
+                onExposed={fetchWebStatus}
+              />
+            )}
+
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              เว็บนี้ทำงานคู่กับแอป — ปิดหน้าต่างแล้วแอปจะซ่อนอยู่ใน tray ต่อไป (ไม่หยุดทำงาน)
+              {webStatus.desktopMode && ' ถ้าต้องการหยุดจริง ๆ ให้กด Quit จากเมนู tray'}
+            </p>
+          </div>
+        )}
+      </section>
 
       <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start">
       {/* Cloudflare */}

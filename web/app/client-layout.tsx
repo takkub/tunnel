@@ -1,8 +1,16 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ExposeOnlineForm from '@/components/ExposeOnlineForm'
+
+interface WebStatus {
+  port: number
+  localUrl: string
+  publicTunnel: { name: string; hostname: string | null; running: boolean } | null
+  mode: 'online' | 'local-only'
+}
 
 function IconTunnel({ className }: { className?: string }) {
   return (
@@ -79,6 +87,87 @@ const pageTitles: Record<string, string> = {
   '/docker': 'Docker',
   '/settings': 'Settings',
   '/setup': 'Setup',
+}
+
+function IconExternalLink({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  )
+}
+
+function WebStatusBlock() {
+  const router = useRouter()
+  const [status, setStatus] = useState<WebStatus | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [zoneName, setZoneName] = useState<string | null>(null)
+  const [adminPasswordSet, setAdminPasswordSet] = useState(false)
+
+  const fetchStatus = useCallback(() => {
+    fetch('/api/web-status')
+      .then(res => (res.ok ? res.json() : Promise.reject()))
+      .then((data: WebStatus) => { setStatus(data); setFailed(false) })
+      .catch(() => setFailed(true))
+  }, [])
+
+  useEffect(() => {
+    fetchStatus()
+    const id = setInterval(fetchStatus, 15000)
+    return () => clearInterval(id)
+  }, [fetchStatus])
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!data) return
+        setZoneName(data.cloudflare?.zoneName ?? null)
+        setAdminPasswordSet(Boolean(data.admin?.passwordSet))
+      })
+      .catch(() => { /* settings API not ready */ })
+  }, [])
+
+  const dotColor = failed ? 'bg-zinc-600' : status?.mode === 'online' ? 'bg-emerald-400' : 'bg-amber-400'
+  const label = failed ? 'Offline' : status?.mode === 'online' ? 'Online' : 'Local only'
+
+  return (
+    <div className="px-4 py-2.5 border-t border-zinc-800/60 shrink-0 space-y-1.5">
+      <button
+        type="button"
+        onClick={() => router.push('/settings')}
+        className="w-full flex items-center gap-2 text-left group"
+        title="ไปที่ Settings"
+      >
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+        <span className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">{label}</span>
+        {status?.mode === 'online' && status.publicTunnel?.hostname && (
+          <span className="text-[11px] text-zinc-500 truncate group-hover:text-zinc-400 transition-colors">
+            {status.publicTunnel.hostname}
+          </span>
+        )}
+        {status?.mode !== 'online' && status && (
+          <span className="text-[11px] text-zinc-500 truncate group-hover:text-zinc-400 transition-colors">
+            localhost:{status.port}
+          </span>
+        )}
+        <IconExternalLink className="w-3 h-3 text-zinc-600 flex-shrink-0 ml-auto group-hover:text-zinc-400 transition-colors" />
+      </button>
+      {status && status.mode !== 'online' && (
+        <div onClick={e => e.stopPropagation()}>
+          <ExposeOnlineForm
+            webPort={status.port}
+            zoneName={zoneName}
+            adminPasswordSet={adminPasswordSet}
+            onExposed={fetchStatus}
+            compact
+          />
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function ClientLayout({ children, version }: { children: React.ReactNode; version: string }) {
@@ -182,6 +271,8 @@ export function ClientLayout({ children, version }: { children: React.ReactNode;
             )
           })}
         </nav>
+
+        <WebStatusBlock />
 
         {/* Logout */}
         <div className="p-2 border-t border-zinc-800/60 shrink-0">
