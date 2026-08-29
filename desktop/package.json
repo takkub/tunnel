@@ -1,6 +1,6 @@
 {
   "name": "tunnel-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Cloudflare Tunnel Manager — desktop app",
   "private": true,
   "main": "dist/main.js",
@@ -25,12 +25,28 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "resources/scripts", "to": "app/scripts" },
-      { "from": "resources/nginx", "to": "app/nginx" },
-      { "from": "resources/web-standalone", "to": "app/web" }
+      {
+        "from": "resources/scripts",
+        "to": "app/scripts"
+      },
+      {
+        "from": "resources/nginx",
+        "to": "app/nginx"
+      },
+      {
+        "from": "resources/web-standalone",
+        "to": "app/web"
+      }
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {
@@ -38,13 +54,25 @@
       "allowToChangeInstallationDirectory": true
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.developer-tools",
       "identity": null
     },
     "publish": [
-      { "provider": "github", "owner": "takkub", "repo": "tunnel" }
+      {
+        "provider": "github",
+        "owner": "takkub",
+        "repo": "tunnel"
+      }
     ]
   },
   "dependencies": {
