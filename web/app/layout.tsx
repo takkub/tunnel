@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Noto_Sans_Thai } from 'next/font/google'
 import './globals.css'
 import { ClientLayout } from './client-layout'
+import { getAppVersion } from '@/lib/version'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 const notoThai = Noto_Sans_Thai({
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body className="bg-zinc-950 text-zinc-100 min-h-screen">
-        <ClientLayout>{children}</ClientLayout>
+        <ClientLayout version={getAppVersion()}>{children}</ClientLayout>
       </body>
     </html>
   )
