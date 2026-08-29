@@ -303,10 +303,21 @@ function spawnDetached(bin, args, { cwd, env, logFile } = {}) {
       // runs the redirected command, no log file, dies within ~1s).
       const cmdLine = `cmd.exe /c "${inner}"`;
       const psLiteral = `'${cmdLine.replace(/'/g, "''")}'`;
+      // Win32_Process.Create ignores our own process's console/window state —
+      // without an explicit hidden Win32_ProcessStartup, WMI pops a real,
+      // visible cmd.exe console window on the user's desktop for every launch
+      // (confirmed: this flashed on-screen during plain `npm test` runs).
+      // ShowWindow=0 (SW_HIDE) suppresses it. `-ClassName Win32_ProcessStartup`
+      // on New-CimInstance produces an instance CIM's type-checker rejects for
+      // this embedded parameter ("Type mismatch") — it must be built from
+      // Get-CimClass instead. CreateFlags is *not* a usable property here:
+      // setting it (e.g. to CREATE_NO_WINDOW) makes Create() itself fail with
+      // ReturnValue=21 (invalid parameter) — confirmed empirically; ShowWindow
+      // alone is sufficient and is the documented technique for this.
+      const psScript = `$si = New-CimInstance -CimClass (Get-CimClass -ClassName Win32_ProcessStartup) -ClientOnly -Property @{ShowWindow=0}; (Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=${psLiteral}; ProcessStartupInformation=$si}).ProcessId`;
       const r = spawnSync('powershell', [
-        '-NoProfile', '-NonInteractive', '-Command',
-        `(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=${psLiteral}}).ProcessId`,
-      ], { encoding: 'utf8', timeout: 15000 });
+        '-NoProfile', '-NonInteractive', '-Command', psScript,
+      ], { encoding: 'utf8', timeout: 15000, windowsHide: true });
       const wmiPid = parseInt((r.stdout || '').trim(), 10);
       if (r.status === 0 && Number.isFinite(wmiPid) && wmiPid > 0) pid = wmiPid;
     } catch {}
@@ -390,7 +401,7 @@ function killDetached(pid) {
   if (!Number.isFinite(pid) || !isAlive(pid)) return true; // already gone
   const attempt = () => {
     if (process.platform === 'win32') {
-      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
     } else {
       // Negative pid targets the whole process group (see the `detached` note above).
       try { process.kill(-pid); } catch { try { process.kill(pid); } catch {} }
