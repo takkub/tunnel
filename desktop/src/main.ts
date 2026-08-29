@@ -1,7 +1,9 @@
-import { app, BrowserWindow, Menu, Tray, dialog, shell } from 'electron'
+import { app, BrowserWindow, Menu, Tray, Notification, dialog, shell } from 'electron'
 import path from 'path'
 import { startServer, stopServer } from './server'
 import { startAllTunnels, stopAllTunnels } from './tunnels'
+import { runAutostartTunnels, formatAutostartSummary, AutostartSummary } from './autostart'
+import { readDesktopSettings, applyLoginItemSettings, watchDesktopSettings } from './settings'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -42,17 +44,30 @@ async function bootstrap() {
     return
   }
 
-  createWindow()
+  applyLoginItemSettings(readDesktopSettings())
+  watchDesktopSettings(settings => applyLoginItemSettings(settings))
+
+  createWindow(shouldStartHidden())
   createTray()
+  autostartTunnelsIfEnabled()
   checkForUpdates()
 }
 
-function createWindow() {
+// --hidden is how we relaunch ourselves as a Windows/Linux login item (passed
+// via setLoginItemSettings' `args`); wasOpenedAsHidden is macOS's equivalent
+// signal for a login item opened via openAsHidden.
+function shouldStartHidden(): boolean {
+  if (process.argv.includes('--hidden')) return true
+  return Boolean(app.getLoginItemSettings().wasOpenedAsHidden)
+}
+
+function createWindow(hidden: boolean) {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
     minWidth: 960,
     minHeight: 640,
+    show: !hidden,
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       contextIsolation: true,
@@ -106,6 +121,15 @@ function rebuildTrayMenu(busy = false) {
       enabled: !busy,
       click: () => runTrayAction('Stop All Tunnels', stopAllTunnels),
     },
+    {
+      label: 'Autostart Tunnels Now',
+      enabled: !busy,
+      click: () =>
+        runTrayAction('Autostart Tunnels Now', async () => {
+          const summary = await runAutostartTunnels()
+          showAutostartNotification(summary)
+        }),
+    },
     { type: 'separator' },
     {
       label: 'Quit',
@@ -127,6 +151,31 @@ async function runTrayAction(label: string, action: () => Promise<void>) {
     dialog.showErrorBox(label, (err as Error).message)
   } finally {
     rebuildTrayMenu(false)
+  }
+}
+
+// Fire-and-forget: never blocks window/tray creation on the autostart run.
+function autostartTunnelsIfEnabled() {
+  if (readDesktopSettings().autostartTunnelsOnLaunch === false) return
+  runAutostartTunnels()
+    .then(summary => showAutostartNotification(summary))
+    .catch(err => {
+      console.error('[autostart]', (err as Error).message)
+      if (Notification.isSupported()) {
+        new Notification({ title: 'Autostart Tunnels — failed', body: (err as Error).message }).show()
+      }
+    })
+}
+
+function showAutostartNotification(summary: AutostartSummary) {
+  const body = formatAutostartSummary(summary)
+  const title = summary.failed.length ? 'Autostart Tunnels — issues' : 'Autostart Tunnels'
+  if (process.platform === 'win32' && tray) {
+    tray.displayBalloon({ title, content: body })
+    return
+  }
+  if (Notification.isSupported()) {
+    new Notification({ title, body }).show()
   }
 }
 
