@@ -360,7 +360,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-4">
+    <div className="space-y-4">
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       {/* Header */}
@@ -375,7 +375,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 items-start">
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start">
       {/* Cloudflare */}
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
         <h2 className="font-semibold text-zinc-200">Cloudflare</h2>
