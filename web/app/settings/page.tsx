@@ -4,7 +4,6 @@ import Button from '@/components/Button'
 import Toast from '@/components/Toast'
 import RefreshButton from '@/components/RefreshButton'
 import CopyButton from '@/components/CopyButton'
-import pkg from '../../package.json'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
 interface DomainEntry { domain: string; zoneId: string }
@@ -15,6 +14,7 @@ interface SettingsResponse {
   runtime: { mode: RuntimeMode; effectiveMode: 'docker' | 'native'; dockerAvailable: boolean; dataDir: string; desktopMode: boolean }
   cloudflared: { installed: boolean; version: string | null; path: string | null; loggedIn: boolean }
   admin?: { passwordSet: boolean }
+  appVersion: string
 }
 
 function IconZap() {
@@ -290,7 +290,8 @@ export default function SettingsPage() {
   }
 
   // ---- Requirements ----
-  const [reqs, setReqs] = useState<Record<string, boolean>>({})
+  type ReqValue = boolean | { ok: boolean; optional: boolean }
+  const [reqs, setReqs] = useState<Record<string, ReqValue>>({})
   const [reqsLoading, setReqsLoading] = useState(false)
   const fetchReqs = async () => {
     setReqsLoading(true)
@@ -706,18 +707,29 @@ export default function SettingsPage() {
           <p className="text-sm text-zinc-500">ไม่พบข้อมูล</p>
         ) : (
           <ul className="space-y-1">
-            {Object.entries(reqs).map(([k, v]) => (
-              <li key={k} className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm ${
-                v ? 'bg-emerald-500/5 border border-emerald-500/10' : 'bg-red-500/5 border border-red-500/10'
-              }`}>
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  v ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+            {Object.entries(reqs).map(([k, raw]) => {
+              const ok = typeof raw === 'boolean' ? raw : raw.ok
+              const optional = typeof raw === 'boolean' ? false : raw.optional
+              const missingButOptional = !ok && optional
+              return (
+                <li key={k} className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm ${
+                  ok ? 'bg-emerald-500/5 border border-emerald-500/10'
+                    : missingButOptional ? 'bg-zinc-800/40 border border-zinc-700/50'
+                    : 'bg-red-500/5 border border-red-500/10'
                 }`}>
-                  {v ? '✓' : '✗'}
-                </span>
-                <span className={v ? 'text-zinc-200' : 'text-zinc-400'}>{k}</span>
-              </li>
-            ))}
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                    ok ? 'bg-emerald-500/20 text-emerald-400'
+                      : missingButOptional ? 'bg-zinc-700 text-zinc-400'
+                      : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {ok ? '✓' : missingButOptional ? '–' : '✗'}
+                  </span>
+                  <span className={ok ? 'text-zinc-200' : 'text-zinc-400'}>
+                    {k}{missingButOptional ? ' (ไม่จำเป็นสำหรับ native mode)' : ''}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>
@@ -726,7 +738,7 @@ export default function SettingsPage() {
       <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-zinc-200">App</h2>
-          <span className="text-xs text-zinc-500 font-mono">v{pkg.version}</span>
+          <span className="text-xs text-zinc-500 font-mono">v{settings?.appVersion ?? '?'}</span>
         </div>
       </section>
     </div>
