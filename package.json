@@ -6,6 +6,8 @@
   "scripts": {
     "web": "cd web && node node_modules/next/dist/bin/next build && node node_modules/next/dist/bin/next start -p 8888",
     "web:dev": "cd web && node node_modules/next/dist/bin/next dev",
+    "web:start": "node scripts/web-serve.js start",
+    "web:stop": "node scripts/web-serve.js stop",
     "menu": "node scripts/menu.js",
     "start": "docker-compose up -d",
     "stop": "docker-compose down",

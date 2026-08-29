@@ -26,7 +26,16 @@ export async function middleware(req: NextRequest) {
 
   const loginUrl = req.nextUrl.clone()
   loginUrl.pathname = '/login'
-  return NextResponse.redirect(loginUrl)
+  // A relative Location, not NextResponse.redirect(loginUrl) — that would
+  // resolve against Next's own view of this request's origin (this server's
+  // internal host:port), not the public hostname a client actually reached
+  // us through (e.g. via a cloudflared tunnel or reverse proxy). Same class
+  // of bug as auth-gate.js's nginx `absolute_redirect off;` fix; browsers
+  // resolve a relative Location against whatever origin they're looking at.
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: loginUrl.pathname + loginUrl.search },
+  })
 }
 
 export const config = {
