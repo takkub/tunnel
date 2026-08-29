@@ -47,6 +47,10 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchTunnels()
     fetchRuntime()
+    if (new URLSearchParams(window.location.search).get('create') === '1') {
+      setShowCreate(true)
+      window.history.replaceState(null, '', '/')
+    }
     const interval = setInterval(fetchTunnels, 30000)
     return () => clearInterval(interval)
   }, [])
