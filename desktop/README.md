@@ -29,6 +29,37 @@ With `DESKTOP_MODE=1` and no `ADMIN_PASSWORD` set, the web login is skipped
 (see `web/middleware.ts`) — the OS login already gates the machine. Setting
 `ADMIN_PASSWORD` still enforces the password gate even inside the app.
 
+## Launch at login / autostart tunnels
+
+The web UI's Settings page writes `desktop.launchAtLogin` and
+`desktop.autostartTunnelsOnLaunch` to `<TUNNEL_DATA_DIR>/settings.json` (via
+`PUT /api/settings`) — there is no IPC channel for this. `src/settings.ts`
+polls that file's mtime every ~2s and, on every boot and every change:
+
+- applies `launchAtLogin` via `app.setLoginItemSettings({ openAtLogin,
+  openAsHidden: true, args: ['--hidden'] })`
+- reads the OS state back with `app.getLoginItemSettings()` and logs (no UI)
+  if it didn't take — e.g. the user removed the login item by hand in the OS
+  settings.
+
+A login-item launch is detected via the `--hidden` arg (Windows/Linux) or
+`app.getLoginItemSettings().wasOpenedAsHidden` (macOS); when detected, the
+main window is created with `show: false` — only the tray appears. Clicking
+the tray still shows the window.
+
+If `desktop.autostartTunnelsOnLaunch !== false`, `scripts/autostart.js
+--json` runs right after the window/tray are created (never blocking their
+creation) the same way the tray's Start/Stop All Tunnels actions shell out to
+`start-all.js`/`stop-all.js`. Results show as a Windows tray balloon or an OS
+notification elsewhere. The tray menu also has an **Autostart Tunnels Now**
+item to re-run it on demand.
+
+**macOS caveat:** `openAsHidden` and `wasOpenedAsHidden` are deprecated as of
+macOS 13 (Ventura) — Apple's replacement Login Items API doesn't expose a
+"launched hidden" signal the same way, so on macOS 13+ a login-item launch
+may briefly show the window before the app can react. `openAtLogin` itself
+still works as a per-user login item on an unsigned build.
+
 ## Signing
 
 Windows and macOS builds are unsigned for now. **TODO:** notarize the macOS
