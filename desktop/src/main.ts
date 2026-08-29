@@ -4,6 +4,7 @@ import { startServer, stopServer } from './server'
 import { startAllTunnels, stopAllTunnels } from './tunnels'
 import { runAutostartTunnels, formatAutostartSummary, AutostartSummary } from './autostart'
 import { readDesktopSettings, applyLoginItemSettings, watchDesktopSettings } from './settings'
+import { initUpdater, checkForUpdatesManual, checkForUpdates, pollUpdateRequests } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -49,6 +50,8 @@ async function bootstrap() {
 
   createWindow(shouldStartHidden())
   createTray()
+  initUpdater(tray)
+  pollUpdateRequests()
   autostartTunnelsIfEnabled()
   checkForUpdates()
 }
@@ -109,6 +112,11 @@ function rebuildTrayMenu(busy = false) {
         mainWindow?.show()
         mainWindow?.focus()
       },
+    },
+    {
+      label: 'Check for Updates…',
+      enabled: !busy,
+      click: () => checkForUpdatesManual(),
     },
     { type: 'separator' },
     {
@@ -176,19 +184,5 @@ function showAutostartNotification(summary: AutostartSummary) {
   }
   if (Notification.isSupported()) {
     new Notification({ title, body }).show()
-  }
-}
-
-function checkForUpdates() {
-  if (!app.isPackaged) return
-  try {
-    // Loaded lazily so dev/unpackaged runs never need electron-updater's
-    // network calls or a configured publish feed.
-    const { autoUpdater } = require('electron-updater')
-    autoUpdater.checkForUpdatesAndNotify().catch((err: Error) => {
-      console.error('[updater]', err.message)
-    })
-  } catch (err) {
-    console.error('[updater] not available:', (err as Error).message)
   }
 }
