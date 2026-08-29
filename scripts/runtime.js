@@ -284,6 +284,16 @@ function resolveCredentialsFile(tunnelDir, configPath) {
 //
 // On POSIX, detached:true already calls setsid(), which is sufficient — Job
 // Objects are a Windows-only concept.
+// Keeps POSIX-fallback-spawned ChildProcess objects reachable. detached+unref'd
+// with no other JS reference, the object can be garbage-collected before the
+// child exits; once that happens Node stops waiting() on that pid, so a later
+// kill() succeeds at the OS level but leaves an unreaped zombie that
+// process.kill(pid, 0) still reports as alive (confirmed via CI: killDetached()
+// waiting out its full deadline against a process it had already killed —
+// Windows has no zombie state, so this never surfaces there). Entries are
+// dropped once the child actually exits.
+const posixSpawnedChildren = new Map();
+
 function spawnDetached(bin, args, { cwd, env, logFile } = {}) {
   let pid;
   if (process.platform === 'win32') {
@@ -334,6 +344,9 @@ function spawnDetached(bin, args, { cwd, env, logFile } = {}) {
       windowsHide: true,
       stdio: ['ignore', logFd, logFd],
     });
+    posixSpawnedChildren.set(proc.pid, proc);
+    proc.on('exit', () => posixSpawnedChildren.delete(proc.pid));
+    proc.on('error', () => {}); // e.g. bin missing/non-executable — avoid an uncaught 'error' event
     proc.unref();
     fs.closeSync(logFd);
     pid = proc.pid;

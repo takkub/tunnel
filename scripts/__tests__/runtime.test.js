@@ -16,18 +16,43 @@ function makeTempRoot() {
 }
 
 // nativeStart() always invokes its binary with fixed cloudflared-style args
-// ('tunnel --config ... run'), which a real node.exe stand-in would choke on
-// (it treats the bare 'tunnel' token as an entry-script path to resolve —
-// MODULE_NOT_FOUND, instant exit). A self-contained batch loop sidesteps
-// that: it ignores whatever args it's given and just runs, independent of
-// cwd (unlike a script needing module resolution), so it works the same way
-// under both spawnDetached() launch paths (WMI-via-cmd.exe and the plain
-// spawn fallback).
+// ('tunnel --config ... run'), which a real node.exe stand-in passed directly
+// as the binary would choke on (it treats the bare 'tunnel' token as an
+// entry-script path to resolve — MODULE_NOT_FOUND, instant exit). A
+// self-contained sleeper script sidesteps that: it ignores whatever args it's
+// given and just runs, independent of cwd, so it works the same way under
+// both spawnDetached() launch paths (WMI-via-cmd.exe and the plain spawn
+// fallback).
+//
+// On win32, spawnDetached's WMI path always runs the binary through an
+// explicit `cmd.exe /c`, so a .cmd batch file works as the "binary" being
+// spawned. On POSIX, spawnDetached's plain-spawn fallback execve()s the
+// binary path directly — no shell in between — so the file needs its own
+// shebang plus the execute bit set, or it fails with EACCES (confirmed via
+// CI: a .cmd file has neither on Linux).
 function makeSleeperBin() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-bin-'));
-  const cmdPath = path.join(dir, 'sleeper.cmd');
-  fs.writeFileSync(cmdPath, '@echo off\r\n:loop\r\nping -n 2 127.0.0.1 >nul\r\ngoto loop\r\n');
-  return cmdPath;
+  if (process.platform === 'win32') {
+    const cmdPath = path.join(dir, 'sleeper.cmd');
+    fs.writeFileSync(cmdPath, '@echo off\r\n:loop\r\nping -n 2 127.0.0.1 >nul\r\ngoto loop\r\n');
+    return cmdPath;
+  }
+  const scriptPath = path.join(dir, 'sleeper.js');
+  fs.writeFileSync(scriptPath, '#!/usr/bin/env node\nsetInterval(() => {}, 1e9);\n');
+  fs.chmodSync(scriptPath, 0o755);
+  return scriptPath;
+}
+
+// Best-effort last-resort cleanup for a spawned pid, cross-platform (the
+// production kill path, runtime.js's killDetached(), is exercised by the
+// tests themselves — this is only a safety net for when a test fails before
+// reaching that).
+function forceKill(pid) {
+  if (process.platform === 'win32') {
+    try { require('child_process').spawnSync('taskkill', ['/PID', String(pid), '/T', '/F']); } catch {}
+  } else {
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }
 }
 
 async function waitFor(predicate, { timeoutMs = 3000, intervalMs = 100 } = {}) {
@@ -122,7 +147,7 @@ test('nativeStop() actually terminates a real nativeStart()-launched process, no
   fs.writeFileSync(path.join(tunnelDir, 'fake-id.json'), '{}');
 
   const pid = runtime.nativeStart('demo');
-  t.after(() => { try { require('child_process').spawnSync('taskkill', ['/PID', String(pid), '/T', '/F']); } catch {} });
+  t.after(() => forceKill(pid));
   assert.ok(await waitFor(() => { try { process.kill(pid, 0); return true; } catch { return false; } }));
 
   runtime.nativeStop('demo');
@@ -293,7 +318,7 @@ test('nativeStart()-spawned child survives its parent process exiting outright',
     execFileSync(process.execPath, ['-e', harness], { encoding: 'utf8' }).trim(),
     10
   );
-  t.after(() => { try { require('child_process').spawnSync('taskkill', ['/PID', String(grandchildPid), '/T', '/F']); } catch {} });
+  t.after(() => forceKill(grandchildPid));
 
   assert.ok(grandchildPid > 0);
   const alive = await waitFor(() => {
