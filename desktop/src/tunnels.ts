@@ -3,13 +3,14 @@
 import { spawn } from 'child_process'
 import path from 'path'
 import { TUNNEL_ROOT, TUNNEL_DATA_DIR } from './server'
+import { buildSpawnEnv } from './dotenv-env'
 
 function runScript(scriptName: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(TUNNEL_ROOT, 'scripts', scriptName)
     const proc = spawn(process.execPath, [scriptPath], {
       cwd: TUNNEL_DATA_DIR,
-      env: { ...process.env, CI: '1', TUNNEL_ROOT, TUNNEL_DATA_DIR, ELECTRON_RUN_AS_NODE: '1' },
+      env: buildSpawnEnv(TUNNEL_DATA_DIR, { CI: '1', TUNNEL_ROOT, TUNNEL_DATA_DIR, ELECTRON_RUN_AS_NODE: '1' }),
     })
     proc.on('error', reject)
     proc.on('close', code => (code === 0 ? resolve() : reject(new Error(`${scriptName} exited ${code}`))))

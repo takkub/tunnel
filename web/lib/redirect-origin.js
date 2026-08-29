@@ -18,14 +18,31 @@
 // instead (this app only ever binds to localhost/127.0.0.1 for direct use —
 // anything else reached us through the tunnel, which is always TLS).
 function isLoopbackHost(host) {
-  const hostname = host.split(':')[0]
+  // Strip a port suffix without mangling a bare/bracketed IPv6 address:
+  // '[::1]:8888' -> '::1' (bracketed form always carries a port here),
+  // 'localhost:8888' -> 'localhost' (exactly one colon = host:port), but
+  // a bare '::1' (no brackets, no port) has 2+ colons and must pass through
+  // untouched, or naively splitting on ':' would take '' and never match.
+  let hostname = host
+  if (host.startsWith('[')) {
+    hostname = host.slice(1, host.indexOf(']'))
+  } else if (host.split(':').length === 2) {
+    hostname = host.split(':')[0]
+  }
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }
 
+// The public-facing host a client actually reached this server through —
+// same signal resolveOrigin() and middleware.ts's DESKTOP_MODE gate both key
+// off of, kept in one place so they can't drift apart.
+function resolveHost(headers, internalHost) {
+  return headers.get('x-forwarded-host') || headers.get('host') || internalHost
+}
+
 function resolveOrigin(headers, internalHost, internalProtocol) {
-  const host = headers.get('x-forwarded-host') || headers.get('host') || internalHost
+  const host = resolveHost(headers, internalHost)
   const proto = isLoopbackHost(host) ? internalProtocol.replace(':', '') : 'https'
   return `${proto}://${host}`
 }
 
-module.exports = { resolveOrigin }
+module.exports = { resolveOrigin, resolveHost, isLoopbackHost }
