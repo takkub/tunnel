@@ -103,10 +103,33 @@ function getEffectiveMode() {
   return isDockerAvailable() ? 'docker' : 'native';
 }
 
+// A tunnel's ingress config.yml hardcodes a host that only resolves in one
+// runtime: 'host.docker.internal' (docker mode) or 'localhost' (native mode) —
+// see create-tunnel.js's `mode === 'docker' ? host.docker.internal : localhost`.
+// A tunnel started under the *other* mode (e.g. after a docker->native switch,
+// or a fleet with mixed per-tunnel modes) needs its `service:` lines rewritten
+// first, or cloudflared connects to the edge fine but every request 502s
+// because it can't reach the unreachable host. Rewrites every ingress rule in
+// the file (not just one hostname), reusing the same host-per-mode mapping
+// auth-gate.js's rewriteServiceForHostname() already writes at enable time.
+function rewriteIngressHostForMode(configPath, mode) {
+  if (!fs.existsSync(configPath)) return false;
+  const text = fs.readFileSync(configPath, 'utf8');
+  const pattern = mode === 'docker'
+    ? /(\bservice:\s*https?:\/\/)localhost(:)/g
+    : /(\bservice:\s*https?:\/\/)host\.docker\.internal(:)/g;
+  const replacement = mode === 'docker' ? '$1host.docker.internal$2' : '$1localhost$2';
+  if (!pattern.test(text)) return false;
+  fs.writeFileSync(configPath, text.replace(pattern, replacement));
+  return true;
+}
+
 // Docker operations
 function dockerStart(name) {
   const composeFile = path.join(TUNNELS_DIR, name, 'docker-compose.yml');
   if (!fs.existsSync(composeFile)) throw new Error(`No compose file for ${name}`);
+
+  rewriteIngressHostForMode(path.join(TUNNELS_DIR, name, 'config.yml'), 'docker');
 
   const containerName = `cloudflared-tunnel-${name}`;
 
@@ -238,10 +261,95 @@ function resolveCredentialsFile(tunnelDir, configPath) {
   return null;
 }
 
+// Spawns `bin args...` fully detached, with stdout+stderr appended to
+// logFile, surviving not just this process exiting but this process's whole
+// tree being torn down — confirmed necessary via a real docker->native
+// migration where 8/9 native cloudflared processes died when the operator's
+// terminal/agent pane closed, despite detached:true+unref(); root cause: the
+// pane's own cleanup kills its whole process tree (a Job Object on Windows),
+// which plain spawn(detached:true) does not escape (Node has no
+// CREATE_BREAKAWAY_FROM_JOB option).
+//
+// On win32, routes the launch through WMI's Win32_Process.Create (via
+// PowerShell's Invoke-CimMethod): a separate, SYSTEM-hosted provider process
+// (WmiPrvSE.exe) creates it on our behalf, so the result is never a
+// descendant of our own process tree at all — confirmed empirically (the new
+// process's parent is WmiPrvSE.exe, not us) — and Invoke-CimMethod returns
+// the real pid directly, so no fragile after-the-fact cmdline matching is
+// needed. Win32_Process.Create has no way to hand it extra env vars or a
+// cwd directly, so both are threaded through as `cmd.exe /c set "K=V" && ...`
+// chaining ahead of the real command. Falls back to a plain detached spawn
+// (still correct for "this process exits normally", just not for "this
+// process's whole tree gets killed") if WMI is unavailable.
+//
+// On POSIX, detached:true already calls setsid(), which is sufficient — Job
+// Objects are a Windows-only concept.
+function spawnDetached(bin, args, { cwd, env, logFile } = {}) {
+  let pid;
+  if (process.platform === 'win32') {
+    try {
+      const dq = s => `"${String(s).replace(/"/g, '""')}"`;
+      const setPrefix = Object.entries(env || {})
+        .map(([k, v]) => `set ${dq(`${k}=${v}`)} && `)
+        .join('');
+      const cdPrefix = cwd ? `cd /d ${dq(cwd)} && ` : '';
+      const command = [dq(bin), ...args.map(dq)].join(' ') + ` > ${dq(logFile)} 2>&1`;
+      const inner = `${cdPrefix}${setPrefix}${command}`;
+      // cmd.exe's `/c` has a well-known quirk: when the command starts with a
+      // quoted token (our binary path, quoted for spaces) and contains other
+      // quoted segments, it mis-parses redirection unless the *entire*
+      // command is wrapped in one more, outer pair of quotes — confirmed
+      // empirically (without this the process launches but silently never
+      // runs the redirected command, no log file, dies within ~1s).
+      const cmdLine = `cmd.exe /c "${inner}"`;
+      const psLiteral = `'${cmdLine.replace(/'/g, "''")}'`;
+      const r = spawnSync('powershell', [
+        '-NoProfile', '-NonInteractive', '-Command',
+        `(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=${psLiteral}}).ProcessId`,
+      ], { encoding: 'utf8', timeout: 15000 });
+      const wmiPid = parseInt((r.stdout || '').trim(), 10);
+      if (r.status === 0 && Number.isFinite(wmiPid) && wmiPid > 0) pid = wmiPid;
+    } catch {}
+    // WMI path unavailable/failed — fall through to the plain spawn below.
+  }
+  if (pid === undefined) {
+    const logFd = fs.openSync(logFile, 'a');
+    const proc = spawn(bin, args, {
+      cwd,
+      env: env ? { ...process.env, ...env } : undefined,
+      // detached so the tunnel outlives this process; on POSIX this also makes
+      // proc.pid a process-group leader, letting nativeStop kill the whole group.
+      detached: true,
+      windowsHide: true,
+      stdio: ['ignore', logFd, logFd],
+    });
+    proc.unref();
+    fs.closeSync(logFd);
+    pid = proc.pid;
+  }
+  // WMI's Create call (and, rarely, even a plain spawn under heavy load) can
+  // return before the OS has fully registered the new pid — confirmed
+  // empirically, an immediate taskkill against a just-returned pid
+  // occasionally found nothing and the process survived as an orphan. Wait
+  // here, once, at the source, so every caller gets a pid that's actually
+  // live rather than each having to guard against "not visible yet".
+  const deadline = Date.now() + 1500;
+  while (!isAlive(pid) && Date.now() < deadline) sleepSync(75);
+  return pid;
+}
+
 // Native operations — pid file + log file live under <TUNNEL_DATA_DIR>/runtime/<name>/,
 // separate from the tunnel's config folder so they survive independently of it
 // and stay out of anything that gets synced/packaged from tunnels/.
 function nativeStart(name) {
+  // Refuse a double-start: a caller that skips its own pre-check (or races
+  // one) would otherwise leave two cloudflared processes fighting over the
+  // same tunnel ID (seen in production: autostart.js started a tunnel that
+  // was already running natively).
+  if (nativeRunning(name, getCloudflaredProcesses())) {
+    throw new Error(`Tunnel already running natively: ${name}`);
+  }
+
   const bin = getCloudflaredBin();
   const tunnelDir = path.join(TUNNELS_DIR, name);
   const configPath = path.join(tunnelDir, 'config.yml');
@@ -250,43 +358,61 @@ function nativeStart(name) {
   const credPath = resolveCredentialsFile(tunnelDir, configPath);
   if (!credPath) throw new Error(`credentials not found for ${name}`);
 
+  rewriteIngressHostForMode(configPath, 'native');
+
   const runDir = getRuntimeDir(name);
   fs.mkdirSync(runDir, { recursive: true });
   const pidFile = path.join(runDir, '.pid');
   const logFile = path.join(runDir, '.log');
 
-  const logFd = fs.openSync(logFile, 'a');
-  const proc = spawn(bin, [
-    'tunnel',
-    '--config', configPath,
-    '--credentials-file', credPath,
-    'run',
-  ], {
-    // detached so the tunnel outlives this process; on POSIX this also makes
-    // proc.pid a process-group leader, letting nativeStop kill the whole group.
-    detached: true,
-    stdio: ['ignore', logFd, logFd],
-  });
-  proc.unref();
-  fs.closeSync(logFd);
-  fs.writeFileSync(pidFile, String(proc.pid));
-  return proc.pid;
+  const pid = spawnDetached(bin, ['tunnel', '--config', configPath, '--credentials-file', credPath, 'run'], { logFile });
+  fs.writeFileSync(pidFile, String(pid));
+  return pid;
+}
+
+function isAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// Kills a spawnDetached()-launched process (and its subtree, on Windows via
+// taskkill /T — needed because a WMI-launched process's recorded pid is
+// often an intermediate cmd.exe, not the real binary). spawnDetached()
+// already waits for the pid to be confirmed alive before handing it back, so
+// this only needs to verify the kill itself landed, retrying briefly if not.
+// Returns whether the pid is confirmed gone, so a caller can avoid
+// discarding its own record of a pid that's still — rarely, under heavy
+// system load — actually alive.
+function killDetached(pid) {
+  if (!Number.isFinite(pid) || !isAlive(pid)) return true; // already gone
+  const attempt = () => {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      // Negative pid targets the whole process group (see the `detached` note above).
+      try { process.kill(-pid); } catch { try { process.kill(pid); } catch {} }
+    }
+  };
+  attempt();
+  const killDeadline = Date.now() + 3000;
+  while (isAlive(pid) && Date.now() < killDeadline) {
+    sleepSync(150);
+    attempt();
+  }
+  return !isAlive(pid);
 }
 
 function nativeStop(name) {
   const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (!fs.existsSync(pidFile)) return; // already stopped
   const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-  if (Number.isFinite(pid)) {
-    if (process.platform === 'win32') {
-      // /T kills the whole process tree; cloudflared has no children today,
-      // but this stays correct if that ever changes.
-      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-    } else {
-      // Negative pid targets the whole process group (see the `detached` note above).
-      try { process.kill(-pid); } catch { try { process.kill(pid); } catch {} }
-    }
-  }
+  // Only discard our record of this pid once it's confirmed dead — losing
+  // the pid file for a process that's still actually running (kill failed)
+  // would make status checks silently forget about it.
+  if (!killDetached(pid)) return;
   try { fs.unlinkSync(pidFile); } catch {}
 }
 
@@ -400,6 +526,9 @@ module.exports = {
   dockerStop,
   dockerStatus,
   getDockerContainerNames,
+  rewriteIngressHostForMode,
+  spawnDetached,
+  killDetached,
   nativeStart,
   nativeStop,
   nativeStatus,
