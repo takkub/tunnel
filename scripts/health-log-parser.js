@@ -25,12 +25,20 @@ function errorHint(message) {
   return null;
 }
 
+// Origin-level errors (the local service behind the tunnel not responding)
+// are not tunnel health problems — cloudflared itself is still connected to
+// the edge with all 4 connections. e.g. 'Request failed error="Unable to
+// reach the origin service: dial tcp 127.0.0.1:3000: ..."'.
+const ORIGIN_ERROR_RE = /unable to reach the origin service/i;
+
 // Parses a text log (or tail of one) into current connection state.
 // Returns activeConnections clamped to [0,4] per cloudflared's max of 4 edge connections.
 function parseLogText(text) {
   const connections = new Map(); // connIndex -> {connIndex, location, protocol, since}
-  let lastError = null; // {time, message, hint}
+  let lastError = null; // {time, message, hint} — tunnel-level only (register/credentials/edge connection)
   let lastErrorAt = null; // ms epoch, or null if unparseable/absent
+  let lastOriginError = null; // {time, message, hint} — origin service unreachable
+  let lastOriginErrorAt = null;
   let lastRegisteredAt = null;
   let lastEventAt = null;
 
@@ -67,8 +75,13 @@ function parseLogText(text) {
     }
 
     if (level === 'ERR' || level === 'FTL') {
-      lastError = { time: validTs ? tsRaw : null, message, hint: errorHint(message) };
-      if (validTs) lastErrorAt = tsMs;
+      if (ORIGIN_ERROR_RE.test(message)) {
+        lastOriginError = { time: validTs ? tsRaw : null, message, hint: errorHint(message) };
+        if (validTs) lastOriginErrorAt = tsMs;
+      } else {
+        lastError = { time: validTs ? tsRaw : null, message, hint: errorHint(message) };
+        if (validTs) lastErrorAt = tsMs;
+      }
     }
   }
 
@@ -78,20 +91,31 @@ function parseLogText(text) {
     activeConnections,
     lastError,
     lastErrorAt,
+    lastOriginError,
+    lastOriginErrorAt,
     lastRegisteredAt,
     lastEventAt,
   };
 }
 
 // running: whether the process/container is currently alive.
-function deriveHealth({ running, activeConnections, lastErrorAt, lastRegisteredAt }) {
+// uptimeSec: how long the process has been running, used to detect a tunnel
+// stuck never reaching its first Registered event.
+// now: injectable clock (ms epoch) so origin-error recency is testable.
+function deriveHealth({ running, activeConnections, lastErrorAt, lastRegisteredAt, lastOriginErrorAt, uptimeSec }, now = Date.now()) {
   if (!running) return 'stopped';
   if (lastErrorAt != null && (lastRegisteredAt == null || lastErrorAt > lastRegisteredAt)) {
     return 'error';
   }
-  if (activeConnections === 0) return 'connecting';
+  if (activeConnections === 0) {
+    if (lastRegisteredAt == null && uptimeSec != null && uptimeSec > 90) return 'error';
+    return 'connecting';
+  }
+  if (lastOriginErrorAt != null && (now - lastOriginErrorAt) / 1000 < 120) {
+    return 'origin-down';
+  }
   if (activeConnections < 4) return 'degraded';
   return 'connected';
 }
 
-module.exports = { parseLogText, deriveHealth, errorHint, LINE_RE };
+module.exports = { parseLogText, deriveHealth, errorHint, LINE_RE, ORIGIN_ERROR_RE };

@@ -45,6 +45,26 @@ test('tunnel-health.js: stopped tunnel reports health "stopped" regardless of lo
   assert.equal(result.pid, null);
 });
 
+test('tunnel-health.js: stopped tunnel with a stale log reports connections=[] and activeConnections=0', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
+  fs.writeFileSync(path.join(dataDir, 'runtime.config.json'), JSON.stringify({ mode: 'native' }));
+  makeTunnel(dataDir, 'stale-stopped');
+  const runDir = path.join(dataDir, 'runtime', 'stale-stopped');
+  fs.mkdirSync(runDir, { recursive: true });
+  // no .pid file -> not running, but an old log from a previous, healthy run
+  const log = [0, 1, 2, 3]
+    .map(i => `2024-05-01T12:00:0${i}Z INF Registered tunnel connection connIndex=${i} location=bkk09 protocol=quic`)
+    .join('\n') + '\n';
+  fs.writeFileSync(path.join(runDir, '.log'), log);
+
+  const result = runHealth(root, dataDir, ['stale-stopped', '--json']);
+  assert.equal(result.running, false);
+  assert.equal(result.health, 'stopped');
+  assert.deepEqual(result.connections, []);
+  assert.equal(result.activeConnections, 0);
+});
+
 test('tunnel-health.js: running native tunnel with 4 registered connections -> connected', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
@@ -66,7 +86,7 @@ test('tunnel-health.js: running native tunnel with 4 registered connections -> c
   assert.equal(result.logPath, path.join(runDir, '.log'));
 });
 
-test('tunnel-health.js: running tunnel with a fresh ERR after connecting -> error, with hint', () => {
+test('tunnel-health.js: running tunnel with a fresh tunnel-level ERR after connecting -> error, with hint', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
   fs.writeFileSync(path.join(dataDir, 'runtime.config.json'), JSON.stringify({ mode: 'native' }));
@@ -76,14 +96,83 @@ test('tunnel-health.js: running tunnel with a fresh ERR after connecting -> erro
   fs.writeFileSync(path.join(runDir, '.pid'), String(process.pid));
   const log = [
     '2024-05-01T12:00:00Z INF Registered tunnel connection connIndex=0 location=bkk09 protocol=quic',
-    '2024-05-01T12:10:00Z ERR Unable to reach the origin service: connection refused',
+    '2024-05-01T12:10:00Z ERR Couldn\'t start tunnel error="Provided Tunnel Credentials are invalid"',
   ].join('\n') + '\n';
   fs.writeFileSync(path.join(runDir, '.log'), log);
 
   const result = runHealth(root, dataDir, ['erroring', '--json']);
   assert.equal(result.health, 'error');
-  assert.match(result.lastError.message, /Unable to reach the origin service/);
-  assert.equal(result.lastError.hint, 'service ปลายทาง (localhost) ไม่ตอบ');
+  assert.match(result.lastError.message, /Tunnel Credentials/);
+  assert.equal(result.lastError.hint, 'credentials ผิด/ถูกลบใน Cloudflare');
+  assert.equal(result.originError, null);
+});
+
+test('tunnel-health.js: recent origin-service error with a live connection -> origin-down, tunnel itself unaffected', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
+  fs.writeFileSync(path.join(dataDir, 'runtime.config.json'), JSON.stringify({ mode: 'native' }));
+  makeTunnel(dataDir, 'origin-down-tunnel');
+  const runDir = path.join(dataDir, 'runtime', 'origin-down-tunnel');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, '.pid'), String(process.pid));
+  const registeredAt = new Date(Date.now() - 60_000).toISOString();
+  const errAt = new Date(Date.now() - 5_000).toISOString();
+  const log = [
+    `${registeredAt} INF Registered tunnel connection connIndex=0 location=bkk09 protocol=quic`,
+    `${errAt} ERR Request failed error="Unable to reach the origin service: dial tcp 127.0.0.1:3000: connect: connection refused"`,
+  ].join('\n') + '\n';
+  fs.writeFileSync(path.join(runDir, '.log'), log);
+
+  const result = runHealth(root, dataDir, ['origin-down-tunnel', '--json']);
+  assert.equal(result.health, 'origin-down');
+  assert.equal(result.lastError, null);
+  assert.ok(result.originError);
+  assert.match(result.originError.message, /Unable to reach the origin service/);
+  assert.equal(result.originError.hint, 'service ปลายทาง (localhost) ไม่ตอบ');
+  assert.ok(result.originError.ageSec < 120);
+  assert.deepEqual(result.lastOriginError, result.originError);
+});
+
+test('tunnel-health.js: stale origin-service error outside the 120s window does not flag origin-down', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
+  fs.writeFileSync(path.join(dataDir, 'runtime.config.json'), JSON.stringify({ mode: 'native' }));
+  makeTunnel(dataDir, 'origin-recovered');
+  const runDir = path.join(dataDir, 'runtime', 'origin-recovered');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, '.pid'), String(process.pid));
+  const registeredAt = new Date(Date.now() - 600_000).toISOString();
+  const errAt = new Date(Date.now() - 300_000).toISOString();
+  const log = [
+    `${registeredAt} INF Registered tunnel connection connIndex=0 location=bkk09 protocol=quic`,
+    `${errAt} ERR Request failed error="Unable to reach the origin service: dial tcp 127.0.0.1:3000: connect: connection refused"`,
+  ].join('\n') + '\n';
+  fs.writeFileSync(path.join(runDir, '.log'), log);
+
+  const result = runHealth(root, dataDir, ['origin-recovered', '--json']);
+  assert.equal(result.health, 'degraded'); // only 1 of 4 connections, but not origin-down anymore
+  assert.equal(result.originError, null);
+  assert.ok(result.lastOriginError); // still surfaced as info
+  assert.ok(result.lastOriginError.ageSec >= 120);
+});
+
+test('tunnel-health.js: running but never Registered past the 90s grace period -> error with hint', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-health-test-data-'));
+  fs.writeFileSync(path.join(dataDir, 'runtime.config.json'), JSON.stringify({ mode: 'native' }));
+  makeTunnel(dataDir, 'stuck-connecting');
+  const runDir = path.join(dataDir, 'runtime', 'stuck-connecting');
+  fs.mkdirSync(runDir, { recursive: true });
+  const pidFile = path.join(runDir, '.pid');
+  fs.writeFileSync(pidFile, String(process.pid));
+  const oldTime = new Date(Date.now() - 120_000);
+  fs.utimesSync(pidFile, oldTime, oldTime); // uptimeSec is derived from the .pid file's mtime
+
+  const result = runHealth(root, dataDir, ['stuck-connecting', '--json']);
+  assert.equal(result.health, 'error');
+  assert.equal(result.activeConnections, 0);
+  assert.ok(result.lastError);
+  assert.equal(result.lastError.hint, 'register ไม่สำเร็จ ดู log');
 });
 
 test('tunnel-health.js: empty/missing log file -> connecting while running', () => {

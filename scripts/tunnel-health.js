@@ -114,15 +114,40 @@ function getTunnelHealth(name, shared) {
     activeConnections: parsed.activeConnections,
     lastErrorAt: parsed.lastErrorAt,
     lastRegisteredAt: parsed.lastRegisteredAt,
+    lastOriginErrorAt: parsed.lastOriginErrorAt,
+    uptimeSec,
   });
+
+  const originAgeSec = parsed.lastOriginErrorAt != null
+    ? Math.max(0, Math.round((Date.now() - parsed.lastOriginErrorAt) / 1000))
+    : null;
+  const lastOriginError = parsed.lastOriginError ? { ...parsed.lastOriginError, ageSec: originAgeSec } : null;
+  // originError only carries the *active* origin problem driving 'origin-down';
+  // an older one is still visible via lastOriginError but doesn't affect health.
+  const originError = health === 'origin-down' ? lastOriginError : null;
+
+  let lastError = parsed.lastError;
+  if (health === 'error' && !lastError) {
+    // Never registered within the startup grace period, and no ERR line to explain why.
+    lastError = { time: null, message: null, hint: 'register ไม่สำเร็จ ดู log' };
+  }
+
+  let connections = parsed.connections;
+  let activeConnections = parsed.activeConnections;
+  if (health === 'stopped') {
+    connections = [];
+    activeConnections = 0;
+  }
 
   return {
     name,
     running,
     health,
-    connections: parsed.connections,
-    activeConnections: parsed.activeConnections,
-    lastError: parsed.lastError,
+    connections,
+    activeConnections,
+    lastError,
+    originError,
+    lastOriginError,
     lastEventAt: parsed.lastEventAt,
     pid,
     uptimeSec,
