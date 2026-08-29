@@ -115,6 +115,24 @@ test('nativeStop() removes the pid file', () => {
   assert.equal(fs.existsSync(path.join(runDir, '.pid')), false);
 });
 
+test('nativeStart() does not mistake tunnel.json/auth-gate.json metadata for the credentials file', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
+  const runtime = loadRuntime(root, dataDir);
+  const cloudflaredBin = require(path.join(root, 'scripts', 'cloudflared-bin.js'));
+  t.mock.method(cloudflaredBin, 'getCloudflaredPath', () => process.execPath);
+
+  // Config references a tunnel ID with no matching <id>.json — forces the
+  // glob fallback in resolveCredentialsFile, which used to pick up any *.json.
+  const tunnelDir = path.join(dataDir, 'tunnels', 'demo');
+  fs.mkdirSync(tunnelDir, { recursive: true });
+  fs.writeFileSync(path.join(tunnelDir, 'config.yml'), 'tunnel: fake-id\n');
+  fs.writeFileSync(path.join(tunnelDir, 'tunnel.json'), JSON.stringify({ autostart: true }));
+  fs.writeFileSync(path.join(tunnelDir, 'auth-gate.json'), JSON.stringify({ enabled: false }));
+
+  assert.throws(() => runtime.nativeStart('demo'), /credentials not found/);
+});
+
 test('generateLaunchers() resolves relative credential paths against TUNNEL_DATA_DIR, not TUNNEL_ROOT', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));

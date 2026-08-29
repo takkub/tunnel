@@ -123,6 +123,29 @@ test('setCloudflareSettings() creates TUNNEL_DATA_DIR when it does not exist yet
   assert.ok(fs.existsSync(path.join(dataDir, 'settings.json')));
 });
 
+test('getDesktopSettings() defaults to launchAtLogin:false, autostartTunnelsOnLaunch:true', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-store-data-'));
+  const mod = loadModule(root, dataDir);
+
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: false, autostartTunnelsOnLaunch: true });
+});
+
+test('setDesktopSettings() persists changes and leaves omitted keys untouched', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-store-data-'));
+  const mod = loadModule(root, dataDir);
+
+  mod.setDesktopSettings({ launchAtLogin: true });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: true, autostartTunnelsOnLaunch: true });
+
+  mod.setDesktopSettings({ autostartTunnelsOnLaunch: false });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: true, autostartTunnelsOnLaunch: false });
+
+  const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8'));
+  assert.deepEqual(onDisk.desktop, { launchAtLogin: true, autostartTunnelsOnLaunch: false });
+});
+
 test('maskToken() only ever exposes the last 4 characters', (t) => {
   const root = makeTempRoot();
   const mod = loadModule(root);

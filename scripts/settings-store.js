@@ -67,6 +67,23 @@ function setCloudflareSettings(update = {}) {
   return getCloudflareSettings();
 }
 
+const DESKTOP_DEFAULTS = { launchAtLogin: false, autostartTunnelsOnLaunch: true };
+
+function getDesktopSettings() {
+  const raw = readRaw();
+  return { ...DESKTOP_DEFAULTS, ...(raw.desktop || {}) };
+}
+
+// Omit a key entirely to leave it untouched.
+function setDesktopSettings(update = {}) {
+  const raw = readRaw();
+  const desktop = { ...DESKTOP_DEFAULTS, ...(raw.desktop || {}) };
+  if (update.launchAtLogin !== undefined) desktop.launchAtLogin = Boolean(update.launchAtLogin);
+  if (update.autostartTunnelsOnLaunch !== undefined) desktop.autostartTunnelsOnLaunch = Boolean(update.autostartTunnelsOnLaunch);
+  writeRaw({ ...raw, desktop });
+  return getDesktopSettings();
+}
+
 module.exports = {
   SETTINGS_FILE,
   getCloudflareToken,
@@ -74,4 +91,6 @@ module.exports = {
   maskToken,
   getCloudflareSettings,
   setCloudflareSettings,
+  getDesktopSettings,
+  setDesktopSettings,
 };
