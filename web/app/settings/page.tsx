@@ -10,10 +10,11 @@ type RuntimeMode = 'auto' | 'docker' | 'native'
 interface DomainEntry { domain: string; zoneId: string }
 
 interface SettingsResponse {
-  cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; accountEmail?: string }
+  cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; zoneName?: string | null; accountEmail?: string }
   desktop: { launchAtLogin: boolean; autostartTunnelsOnLaunch: boolean }
   runtime: { mode: RuntimeMode; effectiveMode: 'docker' | 'native'; dockerAvailable: boolean; dataDir: string; desktopMode: boolean }
   cloudflared: { installed: boolean; version: string | null; path: string | null; loggedIn: boolean }
+  admin?: { passwordSet: boolean }
 }
 
 function IconZap() {
@@ -68,6 +69,11 @@ export default function SettingsPage() {
   const [savingCloudflare, setSavingCloudflare] = useState(false)
 
   const [savingDesktop, setSavingDesktop] = useState<'launchAtLogin' | 'autostartTunnelsOnLaunch' | null>(null)
+
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [savingAdmin, setSavingAdmin] = useState(false)
 
   const [installing, setInstalling] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
@@ -158,6 +164,29 @@ export default function SettingsPage() {
       } else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
     } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
     finally { setSavingCloudflare(false) }
+  }
+
+  const handleSaveAdmin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newPassword.length < 8) { showToast('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 'error'); return }
+    if (newPassword !== confirmNewPassword) { showToast('รหัสผ่านไม่ตรงกัน', 'error'); return }
+    setSavingAdmin(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin: { password: newPassword } }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSettings(data)
+        setChangingPassword(false)
+        setNewPassword('')
+        setConfirmNewPassword('')
+        showToast('เปลี่ยนรหัสผ่านแอดมินแล้ว', 'success')
+      } else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+    } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
+    finally { setSavingAdmin(false) }
   }
 
   const handleInstallCloudflared = async () => {
@@ -350,10 +379,72 @@ export default function SettingsPage() {
                 onChange={e => setZoneIdInput(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
+              {settings.cloudflare.zoneName && (
+                <p className="text-xs text-zinc-500 mt-1.5">โดเมน: {settings.cloudflare.zoneName}</p>
+              )}
             </div>
             <Button onClick={() => {}} disabled={savingCloudflare} loading={savingCloudflare} variant="primary" className="w-full">
               บันทึก
             </Button>
+          </form>
+        )}
+      </section>
+
+      {/* Admin */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+        <h2 className="font-semibold text-zinc-200">แอดมิน</h2>
+        {settingsLoading ? (
+          <div className="h-12 bg-zinc-800 rounded-xl animate-pulse" />
+        ) : settings === null ? (
+          <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
+        ) : !changingPassword ? (
+          <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.admin?.passwordSet ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+              <span className="text-sm text-zinc-200 font-medium">
+                {settings.admin?.passwordSet ? 'ตั้งรหัสผ่านแล้ว' : 'ยังไม่ได้ตั้งรหัสผ่าน'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setChangingPassword(true)}
+              className="flex-shrink-0 px-3.5 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium transition-colors"
+            >
+              เปลี่ยนรหัสแอดมิน
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSaveAdmin} className="space-y-3">
+            <input
+              type="password"
+              autoFocus
+              required
+              minLength={8}
+              placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+            />
+            <input
+              type="password"
+              required
+              placeholder="ยืนยันรหัสผ่านใหม่"
+              value={confirmNewPassword}
+              onChange={e => setConfirmNewPassword(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+            />
+            <div className="flex gap-2">
+              <Button onClick={() => {}} disabled={savingAdmin} loading={savingAdmin} variant="primary" className="flex-1">
+                บันทึก
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setChangingPassword(false); setNewPassword(''); setConfirmNewPassword('') }}
+                className="px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-sm font-medium transition-colors"
+              >
+                ยกเลิก
+              </button>
+            </div>
           </form>
         )}
       </section>
