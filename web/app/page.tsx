@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import TunnelCard from '@/components/TunnelCard'
+import TunnelCard, { TunnelHealth } from '@/components/TunnelCard'
 import Button from '@/components/Button'
 import Toast from '@/components/Toast'
 import CreateTunnelModal from '@/components/CreateTunnelModal'
@@ -26,12 +26,24 @@ export default function DashboardPage() {
   const [effectiveMode, setEffectiveMode] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterType>('all')
+  const [healthMap, setHealthMap] = useState<Record<string, TunnelHealth>>({})
 
   const fetchTunnels = async () => {
     const res = await fetch('/api/tunnels')
     const data = await res.json()
     setTunnels(data.tunnels ?? [])
     setLoading(false)
+  }
+
+  const fetchHealth = async () => {
+    try {
+      const res = await fetch('/api/tunnels/health')
+      if (!res.ok) return
+      const data = await res.json()
+      const map: Record<string, TunnelHealth> = {}
+      for (const t of data.tunnels ?? []) map[t.name] = t
+      setHealthMap(map)
+    } catch { /* API not yet available */ }
   }
 
   const fetchRuntime = async () => {
@@ -47,12 +59,14 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchTunnels()
     fetchRuntime()
+    fetchHealth()
     if (new URLSearchParams(window.location.search).get('create') === '1') {
       setShowCreate(true)
       window.history.replaceState(null, '', '/')
     }
     const interval = setInterval(fetchTunnels, 30000)
-    return () => clearInterval(interval)
+    const healthInterval = setInterval(fetchHealth, 10000)
+    return () => { clearInterval(interval); clearInterval(healthInterval) }
   }, [])
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -272,7 +286,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filteredTunnels.map(t => (
-            <TunnelCard key={t.name} tunnel={t} onRefresh={fetchTunnels} onToast={showToast} />
+            <TunnelCard key={t.name} tunnel={t} health={healthMap[t.name]} onRefresh={fetchTunnels} onToast={showToast} />
           ))}
         </div>
       )}

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AuthGateModal from './AuthGateModal'
+import TunnelLogModal from './TunnelLogModal'
 
 interface Tunnel {
   name: string
@@ -11,13 +12,51 @@ interface Tunnel {
   autostart?: boolean
 }
 
+export type HealthState = 'connected' | 'connecting' | 'degraded' | 'error' | 'stopped'
+
+export interface TunnelHealth {
+  name: string
+  running: boolean
+  health: HealthState
+  activeConnections: number
+  connections: { connIndex: number; location: string; protocol: string; since: string }[]
+  lastError: { time: string; message: string; hint?: string } | null
+  lastEventAt: string
+  uptimeSec: number
+}
+
 interface Props {
   tunnel: Tunnel
+  health?: TunnelHealth
   onRefresh: () => void
   onToast: (msg: string, type: 'success' | 'error') => void
 }
 
-export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
+function formatUptime(sec: number): string {
+  if (!sec || sec <= 0) return '0 น.'
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  if (h === 0) return `${m} น.`
+  return `${h} ชม. ${m} น.`
+}
+
+const HEALTH_LABEL: Record<HealthState, string> = {
+  connected: 'เชื่อมต่อ',
+  connecting: 'กำลังเชื่อมต่อ',
+  degraded: 'ไม่สมบูรณ์',
+  error: 'ผิดพลาด',
+  stopped: 'หยุด',
+}
+
+const HEALTH_STYLE: Record<HealthState, string> = {
+  connected: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+  degraded: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  connecting: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+  error: 'bg-red-500/10 text-red-400 border border-red-500/20',
+  stopped: 'bg-zinc-800 text-zinc-500 border border-zinc-700',
+}
+
+export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props) {
   const [busyAction, setBusyAction] = useState<'start' | 'stop' | 'delete' | null>(null)
   const [showDns, setShowDns] = useState(false)
   const [dnsHost, setDnsHost] = useState('')
@@ -26,11 +65,18 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showAuthGate, setShowAuthGate] = useState(false)
+  const [showLog, setShowLog] = useState(false)
   const [autostart, setAutostart] = useState(tunnel.autostart ?? false)
   const [savingAutostart, setSavingAutostart] = useState(false)
 
   const busy = busyAction !== null
   const hasHostname = !!(tunnel.hostname && tunnel.hostname !== 'cfd')
+  const healthState: HealthState = health?.health ?? (tunnel.running ? 'connected' : 'stopped')
+  const activeConnections = health?.activeConnections ?? (tunnel.running ? undefined : 0)
+  const locations = health?.connections?.map(c => c.location).filter(Boolean).join(', ')
+  const badgeTitle = locations
+    ? `เชื่อมต่อ ${activeConnections ?? '?'}/4 · ${locations}`
+    : undefined
 
   useEffect(() => {
     setAutostart(tunnel.autostart ?? false)
@@ -117,10 +163,12 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
   }
 
   return (
-    <div className={`rounded-xl overflow-hidden transition-all duration-200 ${
-      tunnel.running
-        ? 'bg-[#18181b] border border-zinc-800 border-l-[3px] border-l-emerald-500'
-        : 'bg-[#18181b] border border-zinc-800'
+    <div className={`rounded-xl overflow-hidden transition-all duration-200 bg-[#18181b] border border-zinc-800 ${
+      healthState === 'connected' ? 'border-l-[3px] border-l-emerald-500'
+        : healthState === 'degraded' ? 'border-l-[3px] border-l-amber-500'
+        : healthState === 'connecting' ? 'border-l-[3px] border-l-blue-500'
+        : healthState === 'error' ? 'border-l-[3px] border-l-red-500'
+        : ''
     }`}>
       <div className="p-3 space-y-2.5">
         {/* Header */}
@@ -173,17 +221,35 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
               </div>
             )}
           </div>
-          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-            tunnel.running
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${
-              tunnel.running ? 'bg-emerald-400 animate-pulse-dot' : 'bg-zinc-600'
-            }`} />
-            {tunnel.running ? 'Running' : 'Stopped'}
+          <div
+            title={badgeTitle}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${HEALTH_STYLE[healthState]}`}
+          >
+            {healthState === 'connecting' ? (
+              <span className="w-2.5 h-2.5 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+            ) : (
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                healthState === 'connected' ? 'bg-emerald-400 animate-pulse-dot'
+                  : healthState === 'degraded' ? 'bg-amber-400 animate-pulse-dot'
+                  : healthState === 'error' ? 'bg-red-400'
+                  : 'bg-zinc-600'
+              }`} />
+            )}
+            {healthState === 'connected' || healthState === 'degraded'
+              ? `${HEALTH_LABEL[healthState]} ${activeConnections ?? '?'}/4`
+              : HEALTH_LABEL[healthState]}
           </div>
         </div>
+
+        {health && (health.uptimeSec > 0) && healthState !== 'stopped' && (
+          <p className="text-[11px] text-zinc-600 -mt-1.5">Uptime: {formatUptime(health.uptimeSec)}</p>
+        )}
+
+        {healthState === 'error' && health?.lastError && (
+          <p className="text-xs text-red-400 truncate" title={health.lastError.message}>
+            ⚠ {health.lastError.hint ?? health.lastError.message}
+          </p>
+        )}
 
         {/* Actions row */}
         <div className="flex gap-1.5">
@@ -251,6 +317,21 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
+          </button>
+
+          {/* Log button */}
+          <button
+            onClick={() => setShowLog(true)}
+            disabled={busy}
+            aria-label="ดู log"
+            title="ดู log"
+            className="min-h-[44px] w-11 rounded-lg border bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" />
             </svg>
           </button>
 
@@ -368,6 +449,10 @@ export default function TunnelCard({ tunnel, onRefresh, onToast }: Props) {
           onError={msg => onToast(msg, 'error')}
           onClose={() => setShowAuthGate(false)}
         />
+      )}
+
+      {showLog && (
+        <TunnelLogModal tunnelName={tunnel.name} onClose={() => setShowLog(false)} />
       )}
     </div>
   )
