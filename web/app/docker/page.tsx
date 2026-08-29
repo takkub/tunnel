@@ -172,7 +172,7 @@ export default function DockerPage() {
   ]
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="max-w-[1400px] mx-auto space-y-4">
       {logTarget && <LogPanel container={logTarget} onClose={() => setLogTarget(null)} />}
 
       {/* Header */}
@@ -231,11 +231,11 @@ export default function DockerPage() {
             {containers.length === 0 ? 'ไม่พบ container' : search ? `ไม่พบ container ที่ตรงกับ "${search}"` : 'ไม่มี container ในหมวดนี้'}
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {filteredContainers.map(c => {
               const running = c.state === 'running'
               return (
-                <li key={c.id} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+                <li key={c.id} className="flex flex-col items-stretch gap-2 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2 mb-0.5">
                       <p className="text-sm text-zinc-100 font-medium break-all">{c.name}</p>

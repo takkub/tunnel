@@ -242,7 +242,7 @@ export default function SetupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-5">
       {toast && <Toast message={toast.msg} type={toast.type} />}
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md lg:max-w-2xl space-y-6">
         <div className="text-center space-y-2">
           <div className="w-12 h-12 mx-auto rounded-2xl bg-orange-500 flex items-center justify-center shadow-glow-orange">
             <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">

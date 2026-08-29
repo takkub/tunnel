@@ -195,16 +195,16 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       {!loading && (
-        <div className="grid grid-cols-3 gap-3 max-w-sm">
-          <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center">
+        <div className="grid grid-cols-3 sm:flex sm:gap-3 gap-3">
+          <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center sm:w-32">
             <p className="text-xl font-bold text-zinc-100">{tunnels.length}</p>
             <p className="text-xs text-zinc-500 mt-0.5">Total</p>
           </div>
-          <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center">
+          <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center sm:w-32">
             <p className="text-xl font-bold text-emerald-400">{runningCount}</p>
             <p className="text-xs text-zinc-500 mt-0.5">Running</p>
           </div>
-          <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center">
+          <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-3 text-center sm:w-32">
             <p className="text-xl font-bold text-zinc-400">{tunnels.length - runningCount}</p>
             <p className="text-xs text-zinc-500 mt-0.5">Stopped</p>
           </div>
@@ -213,39 +213,41 @@ export default function DashboardPage() {
 
       {/* Search + filter */}
       <div className="sticky top-0 z-30 py-2" style={{ background: 'rgba(9,9,11,0.95)', backdropFilter: 'blur(8px)' }}>
-        <div className="relative mb-2">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหา tunnel..."
-            className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
-          />
-        </div>
-        <div className="flex gap-2 max-w-md">
-          {chips.map(c => (
-            <button
-              key={c.key}
-              onClick={() => setFilter(c.key)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border ${
-                filter === c.key
-                  ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
-              }`}
-            >
-              {c.label} <span className="opacity-60">{c.count}</span>
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหา tunnel..."
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+            />
+          </div>
+          <div className="flex gap-2 sm:flex-shrink-0">
+            {chips.map(c => (
+              <button
+                key={c.key}
+                onClick={() => setFilter(c.key)}
+                className={`flex-1 sm:flex-none sm:w-28 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border ${
+                  filter === c.key
+                    ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                }`}
+              >
+                {c.label} <span className="opacity-60">{c.count}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Tunnel list */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" aria-busy="true">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3" aria-busy="true">
           {[1, 2, 3].map(i => (
             <div key={i} className="bg-[#18181b] border border-zinc-800 rounded-2xl p-4 animate-pulse space-y-3">
               <div className="flex items-center justify-between">
@@ -284,7 +286,7 @@ export default function DashboardPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           {filteredTunnels.map(t => (
             <TunnelCard key={t.name} tunnel={t} health={healthMap[t.name]} onRefresh={fetchTunnels} onToast={showToast} />
           ))}
