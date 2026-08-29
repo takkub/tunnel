@@ -186,7 +186,7 @@ function dockerStop(name) {
 
 function dockerStatus(name) {
   try {
-    const out = execSync('docker ps --format "{{.Names}}"', { encoding: 'utf8', stdio: 'pipe' });
+    const out = execSync('docker ps --format "{{.Names}}"', { encoding: 'utf8', stdio: 'pipe', timeout: 5000 });
     const containerName = `cloudflared-tunnel-${name}`;
     return out.split('\n').map(l => l.trim()).includes(containerName);
   } catch {
@@ -414,17 +414,30 @@ function killDetached(pid) {
   if (!Number.isFinite(pid) || !isAlive(pid)) return true; // already gone
   const attempt = () => {
     if (process.platform === 'win32') {
-      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 5000 });
     } else {
       // Negative pid targets the whole process group (see the `detached` note above).
       try { process.kill(-pid); } catch { try { process.kill(pid); } catch {} }
     }
   };
   attempt();
-  const killDeadline = Date.now() + 3000;
+  // Deadline confirmed via CI (both ubuntu-latest and windows-latest): a
+  // single taskkill/spawnSync round trip already costs real wall-clock time
+  // under load, and a local run of this same test measured 5982ms end-to-end
+  // against the old 3000ms deadline — comfortable locally but CI's slower/
+  // busier runners routinely tipped it over (nativeStop() and web-serve.js's
+  // stop() both bailed out early reporting the process still alive, moments
+  // before it actually exited). 10s gives real CI headroom; re-issuing the
+  // kill only once a second (not every 150ms poll) avoids piling more
+  // taskkill/spawnSync calls onto an already-loaded runner.
+  const killDeadline = Date.now() + 10000;
+  let lastAttempt = Date.now();
   while (isAlive(pid) && Date.now() < killDeadline) {
     sleepSync(150);
-    attempt();
+    if (Date.now() - lastAttempt >= 1000) {
+      attempt();
+      lastAttempt = Date.now();
+    }
   }
   return !isAlive(pid);
 }
