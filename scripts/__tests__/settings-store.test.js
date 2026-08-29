@@ -123,12 +123,12 @@ test('setCloudflareSettings() creates TUNNEL_DATA_DIR when it does not exist yet
   assert.ok(fs.existsSync(path.join(dataDir, 'settings.json')));
 });
 
-test('getDesktopSettings() defaults to launchAtLogin:false, autostartTunnelsOnLaunch:true', (t) => {
+test('getDesktopSettings() defaults to launchAtLogin:false, autostartTunnelsOnLaunch:true, webPort:null', (t) => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-store-data-'));
   const mod = loadModule(root, dataDir);
 
-  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: false, autostartTunnelsOnLaunch: true });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: false, autostartTunnelsOnLaunch: true, webPort: null });
 });
 
 test('setDesktopSettings() persists changes and leaves omitted keys untouched', (t) => {
@@ -137,13 +137,25 @@ test('setDesktopSettings() persists changes and leaves omitted keys untouched', 
   const mod = loadModule(root, dataDir);
 
   mod.setDesktopSettings({ launchAtLogin: true });
-  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: true, autostartTunnelsOnLaunch: true });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: true, autostartTunnelsOnLaunch: true, webPort: null });
 
   mod.setDesktopSettings({ autostartTunnelsOnLaunch: false });
-  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: true, autostartTunnelsOnLaunch: false });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: true, autostartTunnelsOnLaunch: false, webPort: null });
 
   const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8'));
-  assert.deepEqual(onDisk.desktop, { launchAtLogin: true, autostartTunnelsOnLaunch: false });
+  assert.deepEqual(onDisk.desktop, { launchAtLogin: true, autostartTunnelsOnLaunch: false, webPort: null });
+});
+
+test('setDesktopSettings() sets and clears webPort', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-store-data-'));
+  const mod = loadModule(root, dataDir);
+
+  mod.setDesktopSettings({ webPort: 9001 });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: false, autostartTunnelsOnLaunch: true, webPort: 9001 });
+
+  mod.setDesktopSettings({ webPort: 0 });
+  assert.deepEqual(mod.getDesktopSettings(), { launchAtLogin: false, autostartTunnelsOnLaunch: true, webPort: null });
 });
 
 test('maskToken() only ever exposes the last 4 characters', (t) => {

@@ -11,7 +11,7 @@ import { updateEnvFile } from './env-writer'
 const SETTINGS_FILE = path.join(TUNNEL_DATA_DIR, 'settings.json')
 
 interface StoredCloudflare { apiToken?: string; zoneId?: string; zoneName?: string }
-interface StoredDesktop { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean }
+interface StoredDesktop { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean; webPort?: number | null }
 interface StoredSettings { cloudflare?: StoredCloudflare; desktop?: StoredDesktop }
 
 function readRaw(): StoredSettings {
@@ -112,23 +112,26 @@ export function setAdminPassword(password: string): void {
   for (const [key, value] of Object.entries(updates)) process.env[key] = value
 }
 
-const DESKTOP_DEFAULTS: Required<StoredDesktop> = { launchAtLogin: false, autostartTunnelsOnLaunch: true }
+const DESKTOP_DEFAULTS: Required<StoredDesktop> = { launchAtLogin: false, autostartTunnelsOnLaunch: true, webPort: null }
 
 export interface DesktopSettingsView {
   launchAtLogin: boolean
   autostartTunnelsOnLaunch: boolean
+  webPort: number | null
 }
 
 export function getDesktopSettings(): DesktopSettingsView {
   return { ...DESKTOP_DEFAULTS, ...readRaw().desktop }
 }
 
-// Omit a key entirely to leave it untouched.
-export function setDesktopSettings(update: { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean }): DesktopSettingsView {
+// Omit a key entirely to leave it untouched. Pass webPort as 0/null to clear
+// the override and fall back to TUNNEL_WEB_PORT/get-port again.
+export function setDesktopSettings(update: { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean; webPort?: number | null }): DesktopSettingsView {
   const raw = readRaw()
   const desktop: StoredDesktop = { ...DESKTOP_DEFAULTS, ...raw.desktop }
   if (update.launchAtLogin !== undefined) desktop.launchAtLogin = Boolean(update.launchAtLogin)
   if (update.autostartTunnelsOnLaunch !== undefined) desktop.autostartTunnelsOnLaunch = Boolean(update.autostartTunnelsOnLaunch)
+  if (update.webPort !== undefined) desktop.webPort = update.webPort ? Number(update.webPort) : null
   writeRaw({ ...raw, desktop })
   return getDesktopSettings()
 }
