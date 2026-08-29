@@ -16,6 +16,7 @@ export interface TunnelHealth {
   connections: { connIndex: number; location: string; protocol: string; since: string }[]
   lastError: { time: string; message: string; hint?: string } | null
   originError: { time: string; message: string; hint?: string; ageSec: number } | null
+  lastWarning?: { time: string; message: string; hint?: string } | null
   lastEventAt: string
   uptimeSec: number
 }

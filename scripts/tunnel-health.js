@@ -153,6 +153,7 @@ function getTunnelHealth(name, shared) {
     lastError,
     originError,
     lastOriginError,
+    lastWarning: parsed.lastWarning,
     lastEventAt: parsed.lastEventAt,
     pid,
     uptimeSec,
