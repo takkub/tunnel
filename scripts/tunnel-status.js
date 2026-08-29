@@ -4,7 +4,6 @@ const { getDockerContainerNames, getCloudflaredProcesses, nativeRunning, TUNNELS
 const { readState: readAuthGateState } = require('./auth-gate');
 const { getAutostart } = require('./tunnel-meta');
 
-const filterName = process.argv[2] || null;
 
 function getHostnameFromConfig(tunnelName) {
   try {
@@ -37,19 +36,28 @@ function getTunnelFolders() {
   );
 }
 
-const folders = getTunnelFolders().filter(n => !filterName || n === filterName);
+// Exported so web-status.js can reuse the same tunnel list (docker/native
+// port + hostname detection) without spawning a nested subprocess.
+function listTunnels(filterName) {
+  const folders = getTunnelFolders().filter(n => !filterName || n === filterName);
 
-// Gather state once — reused for all tunnels (no per-tunnel subprocess spawning)
-const dockerContainers = getDockerContainerNames();
-const nativeProcesses = getCloudflaredProcesses();
+  // Gather state once (reused for all tunnels, no per-tunnel subprocess spawning)
+  const dockerContainers = getDockerContainerNames();
+  const nativeProcesses = getCloudflaredProcesses();
 
-const tunnels = folders.map(name => ({
-  name,
-  running: dockerContainers.has(`cloudflared-tunnel-${name}`) || nativeRunning(name, nativeProcesses),
-  hostname: getHostnameFromConfig(name),
-  port: getPortFromConfig(name),
-  authGate: { enabled: !!readAuthGateState(name).enabled },
-  autostart: getAutostart(name),
-}));
+  return folders.map(name => ({
+    name,
+    running: dockerContainers.has(`cloudflared-tunnel-${name}`) || nativeRunning(name, nativeProcesses),
+    hostname: getHostnameFromConfig(name),
+    port: getPortFromConfig(name),
+    authGate: { enabled: !!readAuthGateState(name).enabled },
+    autostart: getAutostart(name),
+  }));
+}
 
-console.log(JSON.stringify({ tunnels }, null, 2));
+if (require.main === module) {
+  const filterName = process.argv[2] || null;
+  console.log(JSON.stringify({ tunnels: listTunnels(filterName) }, null, 2));
+}
+
+module.exports = { listTunnels, getHostnameFromConfig, getPortFromConfig };
