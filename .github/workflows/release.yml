@@ -28,18 +28,41 @@ jobs:
       - name: Install desktop dependencies
         run: npm install --prefix desktop
 
+      # electron-builder treats an unset-but-referenced secret as an empty
+      # string, and on Windows an empty CSC_LINK is parsed as a literal path
+      # ("not correct, cannot resolve") instead of being ignored. So these
+      # vars are only exported when the matching secret actually has a value.
+      #
+      # To enable signed builds later, add these repo secrets:
+      #   Windows:  CSC_LINK, CSC_KEY_PASSWORD
+      #   macOS:    CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,
+      #             APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+      - name: Configure signing
+        shell: bash
+        env:
+          CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD_SECRET: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK_SECRET" ]; then
+            echo "CSC_LINK=$CSC_LINK_SECRET" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD_SECRET" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$APPLE_ID_SECRET" ]; then
+            echo "APPLE_ID=$APPLE_ID_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_SECRET" >> "$GITHUB_ENV"
+          fi
+          # Without this, macOS electron-builder still searches the local
+          # keychain for a signing identity even when CSC_LINK is unset.
+          echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+
       - name: Build and publish desktop app
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing / notarization (optional — see docs/RELEASE.md TODO).
-          # Left unset until secrets are configured; electron-builder produces
-          # an unsigned build with a warning when these are empty.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist -- --publish always
 
       - name: Upload build artifacts
