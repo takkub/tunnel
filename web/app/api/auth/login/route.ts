@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signSession, timingSafeEqual } from '@/lib/auth'
+import { getEnvValue } from '@/lib/env-file'
+import { TUNNEL_DATA_DIR } from '@/lib/paths'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const { password } = (await req.json().catch(() => ({}))) as { password?: string }
-  const expected = process.env.ADMIN_PASSWORD
+  // Lazy .env read (not process.env directly) so a password set moments ago
+  // via PUT /api/settings — this same server process, no restart — applies
+  // right away. See web/lib/settings.ts's setAdminPassword() comment.
+  const expected = getEnvValue(TUNNEL_DATA_DIR, 'ADMIN_PASSWORD')
   if (!expected || typeof password !== 'string' || !await timingSafeEqual(password, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
