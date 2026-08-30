@@ -11,7 +11,7 @@ interface R2UsageResponse {
   ops: { classA: UsageBucket; classB: UsageBucket; period: { from: string; to: string } } | null
   opsUnavailableReason: string | null
   cost: { storageUsd: number; classAUsd: number; classBUsd: number; totalUsd: number }
-  fetchedAt: number
+  fetchedAt: number | string
   cached: boolean
 }
 
@@ -38,8 +38,10 @@ function UsageBar({ label, usedText, pct, dimmed }: { label: string; usedText: s
   )
 }
 
-function formatAgo(ts: number): string {
-  const mins = Math.max(0, Math.floor((Date.now() - ts) / 60000))
+function formatAgo(ts: number | string): string {
+  const parsed = typeof ts === 'string' ? new Date(ts).getTime() : ts
+  if (!Number.isFinite(parsed)) return 'อัปเดตเมื่อสักครู่'
+  const mins = Math.max(0, Math.floor((Date.now() - parsed) / 60000))
   if (mins < 1) return 'เมื่อสักครู่'
   if (mins < 60) return `${mins} นาทีที่แล้ว`
   const hrs = Math.floor(mins / 60)
