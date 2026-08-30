@@ -152,3 +152,36 @@ Screenshots captured and stored in `$TAKKUB_ARTIFACTS_DIR/screenshots/`:
 ## 4. Conclusion & Recommendation
 
 The backend API and core R2 storage integration operate accurately according to specification with valid metrics and caching. However, due to the timestamp format mismatch causing **`อัปเดต NaN ชม.ที่แล้ว`** in the UI, this QA gate is reported as **FAIL** so Lead can dispatch the one-line fix to frontend.
+
+---
+
+## 5. Re-verify: Fix on `web/components/R2UsageCard.tsx`
+
+**Date:** 2026-08-30  
+**Tester:** QA Teammate (`qa`)  
+**Scope:** Re-verify ONLY the timestamp display bug (`NaN ชม.ที่แล้ว`) fix in `web/components/R2UsageCard.tsx`.  
+**Overall Re-verify Status:** **PASS**
+
+### 1. QA Gate (`takkub qa-gate --auto`)
+- **Typecheck & Tests:** 213/213 unit tests passed cleanly (0 failed, duration ~12.2s).
+- **TypeScript build:** `tsc --noEmit` and Next.js build validation passed without errors.
+
+### 2. Live Verification on Settings Page (Port 8899)
+- **Data Source:** Live `%APPDATA%/tunnel-desktop` (`ezstorage` bucket).
+- **Timestamp Subtitle Formatting:**
+  - **Initial Load (Cached):** Displays **`อัปเดต เมื่อสักครู่`** — no `NaN` detected.
+  - **Post-Refresh (`?refresh=1`):** Clicking the refresh button successfully triggers a fresh fetch and displays **`อัปเดตล่าสุด เมื่อสักครู่`** — stays valid with no `NaN`.
+- **Viewports Tested:**
+  - **1440px (Desktop):** Layout renders cleanly with proper spacing and valid subtitle text.
+  - **375px (Mobile):** No horizontal overflow (`scrollWidth <= innerWidth`); all elements fit within viewport.
+
+### 3. Re-verify Evidence Artifacts
+Screenshots captured and stored in `$TAKKUB_ARTIFACTS_DIR/screenshots/`:
+- `reverify-1440px.png` — Desktop viewport (1440px) with fixed `อัปเดต เมื่อสักครู่` subtitle.
+- `reverify-375px.png` — Mobile viewport (375px) responsive check.
+- `reverify-post-refresh-1440px.png` — Desktop viewport (1440px) post-refresh showing `อัปเดตล่าสุด เมื่อสักครู่`.
+- `reverify-post-refresh-375px.png` — Mobile viewport (375px) post-refresh.
+
+### 4. Final Verdict
+**PASS** — The timestamp parsing bug is resolved and the R2 Usage card subtitle formats ISO strings and numeric timestamps correctly across all viewports and refresh states.
+
