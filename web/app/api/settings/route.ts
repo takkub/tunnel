@@ -44,7 +44,7 @@ export async function PUT(req: Request) {
     }
 
     if (body.r2) {
-      for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl'] as const) {
+      for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl', 'analyticsToken'] as const) {
         if (body.r2[key] !== undefined && typeof body.r2[key] !== 'string') {
           return NextResponse.json({ error: `r2.${key} must be a string` }, { status: 400 })
         }
@@ -55,6 +55,7 @@ export async function PUT(req: Request) {
         secretAccessKey: body.r2.secretAccessKey,
         bucket: body.r2.bucket,
         publicUrl: body.r2.publicUrl,
+        analyticsToken: body.r2.analyticsToken,
       })
     }
 

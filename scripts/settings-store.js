@@ -74,6 +74,7 @@ function getR2Field(key, envVar) {
 
 function getR2Settings() {
   const secret = getR2Field('secretAccessKey', 'R2_SECRET_ACCESS_KEY');
+  const analyticsToken = getR2Field('analyticsToken', null);
   return {
     accountId: getR2Field('accountId', 'R2_ACCOUNT_ID'),
     accessKeyId: getR2Field('accessKeyId', 'R2_ACCESS_KEY_ID'),
@@ -81,16 +82,18 @@ function getR2Settings() {
     publicUrl: getR2Field('publicUrl', null),
     secretSet: Boolean(secret),
     secretMasked: maskToken(secret),
+    analyticsTokenSet: Boolean(analyticsToken),
+    analyticsTokenMasked: maskToken(analyticsToken),
   };
 }
 
-// Pass accountId/accessKeyId/secretAccessKey/bucket/publicUrl as '' (or null)
-// to clear the stored override and fall back to .env (where applicable)
-// again; omit a key entirely to leave it untouched.
+// Pass accountId/accessKeyId/secretAccessKey/bucket/publicUrl/analyticsToken
+// as '' (or null) to clear the stored override and fall back to .env (where
+// applicable) again; omit a key entirely to leave it untouched.
 function setR2Settings(update = {}) {
   const raw = readRaw();
   const r2 = { ...(raw.r2 || {}) };
-  for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl']) {
+  for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl', 'analyticsToken']) {
     if (update[key] === undefined) continue;
     if (!update[key]) delete r2[key];
     else r2[key] = update[key];
