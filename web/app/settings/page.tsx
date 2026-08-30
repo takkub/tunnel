@@ -5,6 +5,7 @@ import Toast from '@/components/Toast'
 import RefreshButton from '@/components/RefreshButton'
 import CopyButton from '@/components/CopyButton'
 import ExposeOnlineForm from '@/components/ExposeOnlineForm'
+import R2UsageCard from '@/components/R2UsageCard'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
 interface DomainEntry { domain: string; zoneId: string }
@@ -39,7 +40,7 @@ function formatUptime(sec: number): string {
 
 interface SettingsResponse {
   cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; zoneName?: string | null; accountEmail?: string }
-  r2: { accountId: string | null; accessKeyId: string | null; bucket: string | null; publicUrl: string | null; secretSet: boolean; secretMasked: string | null }
+  r2: { accountId: string | null; accessKeyId: string | null; bucket: string | null; publicUrl: string | null; secretSet: boolean; secretMasked: string | null; analyticsTokenSet: boolean; analyticsTokenMasked: string | null }
   desktop: { launchAtLogin: boolean; autostartTunnelsOnLaunch: boolean }
   runtime: { mode: RuntimeMode; effectiveMode: 'docker' | 'native'; dockerAvailable: boolean; dataDir: string; desktopMode: boolean }
   cloudflared: { installed: boolean; version: string | null; path: string | null; loggedIn: boolean }
@@ -268,6 +269,19 @@ export default function SettingsPage() {
       } else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
     } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
     finally { setSavingR2(false) }
+  }
+
+  const handleSaveAnalyticsToken = async (analyticsToken: string) => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ r2: { analyticsToken } }),
+      })
+      const data = await res.json()
+      if (res.ok) { setSettings(data); showToast('บันทึก Analytics token แล้ว', 'success') }
+      else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+    } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
   }
 
   const handleSaveAdmin = async (e: React.FormEvent) => {
@@ -691,6 +705,13 @@ export default function SettingsPage() {
               บันทึก
             </Button>
           </form>
+        )}
+        {settings && (
+          <R2UsageCard
+            analyticsTokenSet={settings.r2.analyticsTokenSet}
+            analyticsTokenMasked={settings.r2.analyticsTokenMasked}
+            onSaveAnalyticsToken={handleSaveAnalyticsToken}
+          />
         )}
       </section>
 
