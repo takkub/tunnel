@@ -45,6 +45,15 @@ ingress:
 
 const NO_DOCKER = { skipDocker: true, skipTunnelRestart: true };
 
+// getEffectiveMode()'s 'auto' default shells out to `docker ps` to decide
+// docker-vs-native, so a test that doesn't pin a mode would silently run in
+// whichever mode this machine's live Docker availability happens to produce.
+// Tests asserting docker-mode behavior (host.docker.internal, nginx conf.d)
+// must force it explicitly, same as forceNativeMode() below does for native.
+function forceDockerMode(root) {
+  fs.writeFileSync(path.join(root, 'runtime.config.json'), JSON.stringify({ mode: 'docker' }));
+}
+
 test('status() returns disabled defaults when no state file exists', () => {
   const root = makeTempRoot();
   writeConfig(root, 'promptpay', 'pay.example.com', 4000);
@@ -54,6 +63,7 @@ test('status() returns disabled defaults when no state file exists', () => {
 
 test('enable() rewrites ingress service to the gate port and saves originalService', () => {
   const root = makeTempRoot();
+  forceDockerMode(root);
   writeConfig(root, 'promptpay', 'pay.example.com', 4000);
   const { enable, readState } = loadAuthGate(root);
 
@@ -92,6 +102,7 @@ test('disable() restores the original ingress service and clears state', () => {
 
 test('changePassword() updates the hash without touching config.yml ingress', () => {
   const root = makeTempRoot();
+  forceDockerMode(root);
   writeConfig(root, 'promptpay', 'pay.example.com', 4000);
   const { enable, changePassword, readState } = loadAuthGate(root);
 
@@ -117,6 +128,7 @@ test('changePassword() throws when the gate is not enabled', () => {
 
 test('generated nginx conf uses auth_request against the gate service, not auth_basic', () => {
   const root = makeTempRoot();
+  forceDockerMode(root);
   writeConfig(root, 'promptpay', 'pay.example.com', 4000);
   const { enable } = loadAuthGate(root);
   enable('promptpay', 'secret123', NO_DOCKER);
@@ -143,6 +155,7 @@ test('generated nginx conf uses auth_request against the gate service, not auth_
 
 test('disable() leaves a default_server in conf.d so nginx keeps listening on :80 with zero tunnels enabled', () => {
   const root = makeTempRoot();
+  forceDockerMode(root);
   writeConfig(root, 'promptpay', 'pay.example.com', 4000);
   const { enable, disable } = loadAuthGate(root);
 
