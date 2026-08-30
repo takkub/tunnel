@@ -146,3 +146,9 @@ desktop/resources/
 !desktop/build/
 !desktop/build/**
 .session-secret
+
+# Playwright test output
+test-results/
+
+# takkub-managed teammate instructions (do not commit)
+GEMINI.md
