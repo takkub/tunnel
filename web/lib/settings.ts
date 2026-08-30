@@ -11,7 +11,7 @@ import { updateEnvFile } from './env-writer'
 const SETTINGS_FILE = path.join(TUNNEL_DATA_DIR, 'settings.json')
 
 interface StoredCloudflare { apiToken?: string; zoneId?: string; zoneName?: string }
-interface StoredR2 { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string }
+interface StoredR2 { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string; analyticsToken?: string }
 interface StoredDesktop { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean; webPort?: number | null }
 interface StoredSettings { cloudflare?: StoredCloudflare; r2?: StoredR2; desktop?: StoredDesktop }
 
@@ -91,10 +91,13 @@ export interface R2SettingsView {
   publicUrl: string | null
   secretSet: boolean
   secretMasked: string | null
+  analyticsTokenSet: boolean
+  analyticsTokenMasked: string | null
 }
 
 export function getR2Settings(): R2SettingsView {
   const secret = getR2Field('secretAccessKey', 'R2_SECRET_ACCESS_KEY')
+  const analyticsToken = getR2Field('analyticsToken', null)
   return {
     accountId: getR2Field('accountId', 'R2_ACCOUNT_ID'),
     accessKeyId: getR2Field('accessKeyId', 'R2_ACCESS_KEY_ID'),
@@ -102,16 +105,18 @@ export function getR2Settings(): R2SettingsView {
     publicUrl: getR2Field('publicUrl', null),
     secretSet: Boolean(secret),
     secretMasked: maskToken(secret),
+    analyticsTokenSet: Boolean(analyticsToken),
+    analyticsTokenMasked: maskToken(analyticsToken),
   }
 }
 
-// Pass accountId/accessKeyId/secretAccessKey/bucket/publicUrl as '' to clear
-// the stored override (falls back to .env where applicable); omit a key
-// entirely to leave it untouched.
-export function setR2Settings(update: { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string }): R2SettingsView {
+// Pass accountId/accessKeyId/secretAccessKey/bucket/publicUrl/analyticsToken
+// as '' to clear the stored override (falls back to .env where applicable);
+// omit a key entirely to leave it untouched.
+export function setR2Settings(update: { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string; analyticsToken?: string }): R2SettingsView {
   const raw = readRaw()
   const r2: StoredR2 = { ...raw.r2 }
-  for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl'] as const) {
+  for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl', 'analyticsToken'] as const) {
     if (update[key] === undefined) continue
     if (!update[key]) delete r2[key]
     else r2[key] = update[key]
