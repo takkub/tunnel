@@ -39,6 +39,7 @@ function formatUptime(sec: number): string {
 
 interface SettingsResponse {
   cloudflare: { apiTokenSet: boolean; apiTokenMasked: string | null; zoneId: string | null; zoneName?: string | null; accountEmail?: string }
+  r2: { accountId: string | null; accessKeyId: string | null; bucket: string | null; publicUrl: string | null; secretSet: boolean; secretMasked: string | null }
   desktop: { launchAtLogin: boolean; autostartTunnelsOnLaunch: boolean }
   runtime: { mode: RuntimeMode; effectiveMode: 'docker' | 'native'; dockerAvailable: boolean; dataDir: string; desktopMode: boolean }
   cloudflared: { installed: boolean; version: string | null; path: string | null; loggedIn: boolean }
@@ -99,6 +100,14 @@ export default function SettingsPage() {
 
   const [savingDesktop, setSavingDesktop] = useState<'launchAtLogin' | 'autostartTunnelsOnLaunch' | null>(null)
 
+  const [r2AccountId, setR2AccountId] = useState('')
+  const [r2AccessKeyId, setR2AccessKeyId] = useState('')
+  const [r2Secret, setR2Secret] = useState('')
+  const [r2ClearSecret, setR2ClearSecret] = useState(false)
+  const [r2Bucket, setR2Bucket] = useState('')
+  const [r2PublicUrl, setR2PublicUrl] = useState('')
+  const [savingR2, setSavingR2] = useState(false)
+
   const [changingPassword, setChangingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
@@ -150,6 +159,10 @@ export default function SettingsPage() {
         setSettings(data)
         setSelectedMode(data.runtime.mode)
         setZoneIdInput(data.cloudflare.zoneId ?? '')
+        setR2AccountId(data.r2.accountId ?? '')
+        setR2AccessKeyId(data.r2.accessKeyId ?? '')
+        setR2Bucket(data.r2.bucket ?? '')
+        setR2PublicUrl(data.r2.publicUrl ?? '')
         setSettingsUnavailable(false)
       } else {
         setSettingsUnavailable(true)
@@ -226,6 +239,35 @@ export default function SettingsPage() {
       } else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
     } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
     finally { setSavingCloudflare(false) }
+  }
+
+  const handleSaveR2 = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!settings) return
+    setSavingR2(true)
+    try {
+      const r2: { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string } = {
+        accountId: r2AccountId.trim(),
+        accessKeyId: r2AccessKeyId.trim(),
+        bucket: r2Bucket.trim(),
+        publicUrl: r2PublicUrl.trim(),
+      }
+      if (r2ClearSecret) r2.secretAccessKey = ''
+      else if (r2Secret) r2.secretAccessKey = r2Secret
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ r2 }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSettings(data)
+        setR2Secret('')
+        setR2ClearSecret(false)
+        showToast('บันทึก R2 settings แล้ว', 'success')
+      } else showToast(data.error ?? 'เกิดข้อผิดพลาด', 'error')
+    } catch { showToast('ไม่สามารถบันทึกได้', 'error') }
+    finally { setSavingR2(false) }
   }
 
   const handleSaveAdmin = async (e: React.FormEvent) => {
@@ -564,6 +606,88 @@ export default function SettingsPage() {
               )}
             </div>
             <Button onClick={() => {}} disabled={savingCloudflare} loading={savingCloudflare} variant="primary" className="w-full">
+              บันทึก
+            </Button>
+          </form>
+        )}
+      </section>
+
+      {/* Cloudflare R2 */}
+      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
+        <h2 className="font-semibold text-zinc-200">Cloudflare R2</h2>
+        {settingsLoading ? (
+          <div className="space-y-2 animate-pulse">
+            {[1, 2, 3].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
+          </div>
+        ) : settings === null ? (
+          <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
+        ) : (
+          <form onSubmit={handleSaveR2} className="space-y-3">
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">Account ID</label>
+              <input
+                type="text"
+                placeholder="Account ID"
+                value={r2AccountId}
+                onChange={e => setR2AccountId(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">Access Key ID</label>
+              <input
+                type="text"
+                placeholder="Access Key ID"
+                value={r2AccessKeyId}
+                onChange={e => setR2AccessKeyId(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">Secret Access Key</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  placeholder={r2ClearSecret ? '' : (settings.r2.secretSet ? settings.r2.secretMasked ?? '••••••••' : 'วาง Secret Access Key')}
+                  value={r2ClearSecret ? '' : r2Secret}
+                  disabled={r2ClearSecret}
+                  onChange={e => setR2Secret(e.target.value)}
+                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors disabled:opacity-40"
+                />
+                {settings.r2.secretSet && (
+                  <button
+                    type="button"
+                    onClick={() => { setR2ClearSecret(v => !v); setR2Secret('') }}
+                    className={`flex-shrink-0 px-3.5 py-3 rounded-xl text-sm font-medium transition-colors ${
+                      r2ClearSecret ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400'
+                    }`}
+                  >
+                    {r2ClearSecret ? 'ยกเลิกล้าง' : 'ล้าง secret'}
+                  </button>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">Bucket</label>
+              <input
+                type="text"
+                placeholder="Bucket name"
+                value={r2Bucket}
+                onChange={e => setR2Bucket(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">Public URL</label>
+              <input
+                type="text"
+                placeholder="https://..."
+                value={r2PublicUrl}
+                onChange={e => setR2PublicUrl(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+              />
+            </div>
+            <Button onClick={() => {}} disabled={savingR2} loading={savingR2} variant="primary" className="w-full">
               บันทึก
             </Button>
           </form>
