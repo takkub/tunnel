@@ -60,7 +60,27 @@ test('getR2Settings() returns all-unset when nothing is configured', (t) => {
     publicUrl: null,
     secretSet: false,
     secretMasked: null,
+    analyticsTokenSet: false,
+    analyticsTokenMasked: null,
   });
+});
+
+test('setR2Settings() stores analyticsToken masked, and empty string clears it', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-store-r2-data-'));
+  const mod = loadModule(root, dataDir);
+
+  const result = mod.setR2Settings({ analyticsToken: 'analytics-secret-9999' });
+  assert.equal(result.analyticsTokenSet, true);
+  assert.equal(result.analyticsTokenMasked, mod.maskToken('analytics-secret-9999'));
+  assert.equal(JSON.stringify(result).includes('analytics-secret-9999'), false);
+
+  const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8'));
+  assert.equal(onDisk.r2.analyticsToken, 'analytics-secret-9999');
+
+  const cleared = mod.setR2Settings({ analyticsToken: '' });
+  assert.equal(cleared.analyticsTokenSet, false);
+  assert.equal(cleared.analyticsTokenMasked, null);
 });
 
 test('getR2Settings() falls back to .env when settings.json has no override', (t) => {
