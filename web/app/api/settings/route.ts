@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCloudflareSettings, setCloudflareSettings, getDesktopSettings, setDesktopSettings, getAdminSettings, setAdminPassword } from '@/lib/settings'
+import { getCloudflareSettings, setCloudflareSettings, getR2Settings, setR2Settings, getDesktopSettings, setDesktopSettings, getAdminSettings, setAdminPassword } from '@/lib/settings'
 import { getCloudflaredStatus } from '@/lib/cloudflared'
 import { isDockerAvailable, getRuntimeMode, getEffectiveMode, setRuntimeMode } from '@/lib/runtime'
 import { TUNNEL_DATA_DIR } from '@/lib/paths'
@@ -12,6 +12,7 @@ const MIN_ADMIN_PASSWORD_LENGTH = 8
 function buildSettings() {
   return {
     cloudflare: getCloudflareSettings(),
+    r2: getR2Settings(),
     desktop: getDesktopSettings(),
     admin: getAdminSettings(),
     runtime: {
@@ -39,6 +40,21 @@ export async function PUT(req: Request) {
         apiToken: body.cloudflare.apiToken,
         zoneId: body.cloudflare.zoneId,
         zoneName: body.cloudflare.zoneName,
+      })
+    }
+
+    if (body.r2) {
+      for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl'] as const) {
+        if (body.r2[key] !== undefined && typeof body.r2[key] !== 'string') {
+          return NextResponse.json({ error: `r2.${key} must be a string` }, { status: 400 })
+        }
+      }
+      setR2Settings({
+        accountId: body.r2.accountId,
+        accessKeyId: body.r2.accessKeyId,
+        secretAccessKey: body.r2.secretAccessKey,
+        bucket: body.r2.bucket,
+        publicUrl: body.r2.publicUrl,
       })
     }
 

@@ -11,8 +11,9 @@ import { updateEnvFile } from './env-writer'
 const SETTINGS_FILE = path.join(TUNNEL_DATA_DIR, 'settings.json')
 
 interface StoredCloudflare { apiToken?: string; zoneId?: string; zoneName?: string }
+interface StoredR2 { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string }
 interface StoredDesktop { launchAtLogin?: boolean; autostartTunnelsOnLaunch?: boolean; webPort?: number | null }
-interface StoredSettings { cloudflare?: StoredCloudflare; desktop?: StoredDesktop }
+interface StoredSettings { cloudflare?: StoredCloudflare; r2?: StoredR2; desktop?: StoredDesktop }
 
 function readRaw(): StoredSettings {
   try {
@@ -77,6 +78,46 @@ export function setCloudflareSettings(update: { apiToken?: string; zoneId?: stri
   }
   writeRaw({ ...raw, cloudflare })
   return getCloudflareSettings()
+}
+
+function getR2Field(key: keyof StoredR2, envVar: string | null): string | null {
+  return readRaw().r2?.[key] || (envVar ? getEnvValue(TUNNEL_DATA_DIR, envVar) : null) || null
+}
+
+export interface R2SettingsView {
+  accountId: string | null
+  accessKeyId: string | null
+  bucket: string | null
+  publicUrl: string | null
+  secretSet: boolean
+  secretMasked: string | null
+}
+
+export function getR2Settings(): R2SettingsView {
+  const secret = getR2Field('secretAccessKey', 'R2_SECRET_ACCESS_KEY')
+  return {
+    accountId: getR2Field('accountId', 'R2_ACCOUNT_ID'),
+    accessKeyId: getR2Field('accessKeyId', 'R2_ACCESS_KEY_ID'),
+    bucket: getR2Field('bucket', 'R2_BUCKET'),
+    publicUrl: getR2Field('publicUrl', null),
+    secretSet: Boolean(secret),
+    secretMasked: maskToken(secret),
+  }
+}
+
+// Pass accountId/accessKeyId/secretAccessKey/bucket/publicUrl as '' to clear
+// the stored override (falls back to .env where applicable); omit a key
+// entirely to leave it untouched.
+export function setR2Settings(update: { accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; publicUrl?: string }): R2SettingsView {
+  const raw = readRaw()
+  const r2: StoredR2 = { ...raw.r2 }
+  for (const key of ['accountId', 'accessKeyId', 'secretAccessKey', 'bucket', 'publicUrl'] as const) {
+    if (update[key] === undefined) continue
+    if (!update[key]) delete r2[key]
+    else r2[key] = update[key]
+  }
+  writeRaw({ ...raw, r2 })
+  return getR2Settings()
 }
 
 // --- Admin password ------------------------------------------------------
