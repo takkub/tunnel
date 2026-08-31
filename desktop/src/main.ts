@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, Tray, Notification, dialog, shell } from 'electron'
 import path from 'path'
-import { startServer, stopServer } from './server'
+import { startServer, stopServer, TUNNEL_DATA_DIR } from './server'
 import { startAllTunnels, stopAllTunnels } from './tunnels'
 import { runAutostartTunnels, formatAutostartSummary, AutostartSummary } from './autostart'
 import { readDesktopSettings, applyLoginItemSettings, watchDesktopSettings } from './settings'
@@ -12,6 +12,12 @@ import {
   installUpdate,
   startPeriodicChecks,
 } from './updater'
+import { appendLog } from './log'
+
+function log(line: string): void {
+  console.log(line)
+  appendLog(TUNNEL_DATA_DIR, line)
+}
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -44,10 +50,13 @@ if (!gotLock) {
 }
 
 async function bootstrap() {
+  log(`[main] bootstrap starting — app v${app.getVersion()}, packaged=${app.isPackaged}`)
   try {
     const { url } = await startServer()
     serverUrl = url
+    log(`[main] server started at ${url}`)
   } catch (err) {
+    log(`[main] failed to start the local server: ${(err as Error).message}`)
     dialog.showErrorBox('Tunnel Manager', `Failed to start the local server:\n${(err as Error).message}`)
     app.quit()
     return

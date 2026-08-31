@@ -8,10 +8,12 @@ const path = require('path');
 // TUNNEL_ROOT/TUNNEL_DATA_DIR at require time — each test loads a fresh copy
 // under its own temp root, forced into native mode (this sandbox has Docker
 // available, so getEffectiveMode() would otherwise pick 'docker').
+const COPIED_FILES = ['autostart.js', 'tunnel-meta.js', 'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js'];
+
 function makeTempRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'autostart-test-root-'));
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
-  for (const f of ['autostart.js', 'tunnel-meta.js', 'runtime.js', 'cloudflared-bin.js']) {
+  for (const f of COPIED_FILES) {
     fs.copyFileSync(path.join(__dirname, '..', f), path.join(dir, 'scripts', f));
   }
   return dir;
@@ -21,7 +23,7 @@ function loadModule(root, dataDir) {
   const modPath = path.join(root, 'scripts', 'autostart.js');
   const runtimePath = path.join(root, 'scripts', 'runtime.js');
   const binPath = path.join(root, 'scripts', 'cloudflared-bin.js');
-  for (const f of ['autostart.js', 'tunnel-meta.js', 'runtime.js', 'cloudflared-bin.js']) {
+  for (const f of COPIED_FILES) {
     delete require.cache[require.resolve(path.join(root, 'scripts', f))];
   }
   const prevRoot = process.env.TUNNEL_ROOT;
@@ -87,6 +89,7 @@ test('run() starts autostart tunnels that are not running, skips running ones, i
   assert.equal(summary.failed.length, 1);
   assert.equal(summary.failed[0].name, 'broken-flagged');
   assert.match(summary.failed[0].error, /credentials/);
+  assert.deepEqual(summary.gate, { needed: false, started: false, tunnels: [] });
 });
 
 test('run() returns empty lists when no tunnels exist', () => {
@@ -95,5 +98,48 @@ test('run() returns empty lists when no tunnels exist', () => {
   const { mod } = loadModule(root, dataDir);
 
   const summary = mod.run();
-  assert.deepEqual(summary, { mode: 'native', started: [], skipped: [], failed: [] });
+  assert.deepEqual(summary, {
+    mode: 'native', started: [], skipped: [], failed: [],
+    gate: { needed: false, started: false, tunnels: [] },
+  });
+});
+
+test('run() ensures the native auth gate is running for gate-enabled tunnels, independent of the autostart flag', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autostart-test-data-'));
+  const { mod } = loadModule(root, dataDir);
+  const authGate = require(path.join(root, 'scripts', 'auth-gate.js'));
+
+  // Gate-enabled tunnel, no autostart flag set — mirrors the real incident: a
+  // native tunnel survives an app restart on its own (never touched by the
+  // start-loop above), so it never shows up in started/skipped, but its gate
+  // proxy still died with the previous app process and needs to come back.
+  makeTunnel(dataDir, 'gated', { withCredentials: false });
+  fs.writeFileSync(path.join(dataDir, 'tunnels', 'gated', 'auth-gate.json'), JSON.stringify({ enabled: true }));
+
+  t.mock.method(authGate, 'nativeGateRunning', () => false);
+  const ensureMock = t.mock.method(authGate, 'ensureNativeGateRunning', () => {});
+
+  const summary = mod.run();
+
+  assert.equal(ensureMock.mock.calls.length, 1);
+  assert.deepEqual(summary.started, []);
+  assert.deepEqual(summary.skipped, []);
+  assert.deepEqual(summary.gate, { needed: true, started: true, tunnels: ['gated'] });
+});
+
+test('run() reports the gate as already running when it needs no restart', (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autostart-test-data-'));
+  const { mod } = loadModule(root, dataDir);
+  const authGate = require(path.join(root, 'scripts', 'auth-gate.js'));
+
+  makeTunnel(dataDir, 'gated', { withCredentials: false });
+  fs.writeFileSync(path.join(dataDir, 'tunnels', 'gated', 'auth-gate.json'), JSON.stringify({ enabled: true }));
+
+  t.mock.method(authGate, 'nativeGateRunning', () => true);
+  t.mock.method(authGate, 'ensureNativeGateRunning', () => {});
+
+  const summary = mod.run();
+  assert.deepEqual(summary.gate, { needed: true, started: false, tunnels: ['gated'] });
 });

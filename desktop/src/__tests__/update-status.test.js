@@ -9,6 +9,7 @@ const {
   writeUpdateStatus,
   readUpdateRequest,
   writeUpdateRequest,
+  clearUpdateRequest,
 } = require('../update-status');
 
 function tmpDataDir() {
@@ -49,6 +50,23 @@ test('writeUpdateStatus: creates the data dir if missing', () => {
   assert.equal(readUpdateStatus(dir).percent, 42);
 });
 
+test('writeUpdateStatus: clears a stale error message once the state moves on to a non-error state', () => {
+  const dir = tmpDataDir();
+  writeUpdateStatus(dir, { state: 'error', message: "No update filepath provided, can't quit and install" });
+  assert.equal(readUpdateStatus(dir).message, "No update filepath provided, can't quit and install");
+
+  writeUpdateStatus(dir, { state: 'checking', currentVersion: '1.1.11' });
+  const afterChecking = readUpdateStatus(dir);
+  assert.equal(afterChecking.state, 'checking');
+  assert.equal(afterChecking.message, null);
+});
+
+test('writeUpdateStatus: a fresh error message is not clobbered by its own write', () => {
+  const dir = tmpDataDir();
+  writeUpdateStatus(dir, { state: 'error', message: 'boom' });
+  assert.equal(readUpdateStatus(dir).message, 'boom');
+});
+
 test('readUpdateStatus: corrupt file falls back to defaults', () => {
   const dir = tmpDataDir();
   fs.writeFileSync(path.join(dir, 'update-status.json'), '{not json');
@@ -69,4 +87,12 @@ test('writeUpdateRequest/readUpdateRequest: round-trips action + timestamp', () 
 
   writeUpdateRequest(dir, 'install');
   assert.equal(readUpdateRequest(dir).action, 'install');
+});
+
+test('clearUpdateRequest: removes the request file, and is a no-op when there is none', () => {
+  const dir = tmpDataDir();
+  clearUpdateRequest(dir); // no file yet — must not throw
+  writeUpdateRequest(dir, 'check');
+  clearUpdateRequest(dir);
+  assert.equal(readUpdateRequest(dir), null);
 });

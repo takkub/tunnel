@@ -11,6 +11,7 @@ export interface AutostartSummary {
   started: string[]
   skipped: string[]
   failed: { name: string; error: string }[]
+  gate: { needed: boolean; started: boolean; tunnels: string[]; error?: string }
 }
 
 export function runAutostartTunnels(): Promise<AutostartSummary> {
@@ -45,5 +46,12 @@ export function formatAutostartSummary(summary: AutostartSummary): string {
   if (summary.started.length) parts.push(`Started: ${summary.started.join(', ')}`)
   if (summary.skipped.length) parts.push(`Already running: ${summary.skipped.join(', ')}`)
   if (summary.failed.length) parts.push(`Failed: ${summary.failed.map(f => f.name).join(', ')}`)
+  if (summary.gate?.needed) {
+    parts.push(
+      summary.gate.error
+        ? `Auth gate error: ${summary.gate.error}`
+        : `Auth gate: ${summary.gate.started ? 'started' : 'already running'}`
+    )
+  }
   return parts.length ? parts.join(' · ') : 'No autostart tunnels configured'
 }
