@@ -1,5 +1,31 @@
 # Tunnel Management Scripts
 
+## ดาวน์โหลด Desktop App (Windows / macOS)
+
+โหลดตัวติดตั้งล่าสุดจาก [GitHub Releases](https://github.com/takkub/tunnel/releases/latest):
+
+| ไฟล์ | ใช้กับเครื่อง |
+|---|---|
+| `tunnel-<version>-win-x64.exe` | Windows |
+| `tunnel-<version>-mac-x64.dmg` | Mac **Intel** |
+| `tunnel-<version>-mac-arm64.dmg` | Mac **Apple Silicon** (M1/M2/M3/M4) |
+
+ไม่แน่ใจว่าเครื่องเป็นแบบไหน เช็คได้จาก  › **About This Mac** → ดูช่อง Chip/Processor
+
+### ติดตั้งบน macOS
+
+1. เลือกไฟล์ให้ตรงเครื่อง (ตารางด้านบน)
+2. เปิด `.dmg` แล้วลาก **Tunnel Manager.app** ไปที่ `Applications`
+3. **ก่อนเปิดครั้งแรก** เปิด Terminal แล้วรันคำสั่งนี้ก่อน:
+   ```bash
+   xattr -cr "/Applications/Tunnel Manager.app"
+   ```
+4. ถ้าเปิดแล้วยังถูกบล็อกอยู่ ให้ไปที่ **System Settings → Privacy & Security → เลื่อนลงหา Tunnel Manager → Open Anyway** (macOS 15 ขึ้นไปตัดทางลัด right-click → Open ออกแล้ว ต้องเข้าหน้านี้เท่านั้น)
+
+> ทำไมขึ้น `"Tunnel Manager" is damaged and can't be opened. You should move it to the Trash.` — เพราะแอปยังไม่ได้ code-sign/notarize (ดูสถานะที่ [`docs/RELEASE.md`](docs/RELEASE.md#️-todo-code-signing--notarization)) ไม่ใช่ไฟล์เสียจริง ไฟล์ที่โหลดผ่านเบราว์เซอร์จะติด quarantine attribute ที่ทำให้ Gatekeeper ปฏิเสธไฟล์ที่ไม่มีลายเซ็นก่อนเสมอ คำสั่ง `xattr -cr` ข้างบนคือการล้าง attribute นั้นออก
+
+Windows จะเจอ **SmartScreen** เตือนลักษณะเดียวกัน (unsigned `.exe`) → กด **More info → Run anyway**
+
 ## ติดตั้งผ่าน npm
 
 ```bash

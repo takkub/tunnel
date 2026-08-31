@@ -42,6 +42,18 @@ Workflow ปัจจุบัน build ได้แต่**ไม่ได้ s
 
 ไม่มี secret พวกนี้ → electron-builder จะ build แบบ unsigned พร้อม warning (ไม่ fail build)
 
+### อาการที่ผู้ใช้เจอ + workaround
+
+Unsigned build → macOS Gatekeeper บล็อกด้วยข้อความ `"Tunnel Manager" is damaged
+and can't be opened. You should move it to the Trash.` (ไม่ใช่ไฟล์เสียจริง —
+เป็นเพราะไม่มี signature/notarization + quarantine attribute จาก browser)
+Windows เจอ SmartScreen เตือนคล้ายกัน วิธีแก้ทั้งสอง OS อยู่ที่
+[`README.md` § ติดตั้งบน macOS](../README.md#ติดตั้งบน-macos)
+
+**Checklist:** release notes ของทุกเวอร์ชัน (GitHub Release ของ tag นั้น) ต้อง
+แปะลิงก์คำแนะนำนี้ไว้ จนกว่าจะมี code signing/notarization จริง (ดู checklist
+ด้านบน) — ไม่งั้นผู้ใช้ที่ไม่รู้จะคิดว่าไฟล์เสียแล้วเลิกใช้
+
 ## หมายเหตุ: ยังไม่มี `package-lock.json`
 
 repo นี้ยังไม่ commit lockfile ไว้ (root/`web`/`desktop`) — CI/release เลยใช้ `npm install` แทน `npm ci` ไปก่อน เมื่อ commit lockfile แล้วควรเปลี่ยนทั้งสอง workflow กลับไปใช้ `npm ci` เพื่อ install ที่ reproducible และเร็วขึ้น (cache ได้ด้วย `actions/setup-node`'s `cache: npm`)
