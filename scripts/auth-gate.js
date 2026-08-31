@@ -22,6 +22,7 @@ const {
   getCloudflaredProcesses,
   spawnDetached,
   killDetached,
+  isAlive,
 } = require('./runtime');
 const { hashPassword, ensureSecretFile } = require('./auth-gate-crypto');
 const { assertValidCountries } = require('./auth-gate-country');
@@ -379,6 +380,20 @@ function ensureNativeGateRunning() {
     logFile: NATIVE_GATE_LOG_FILE,
   });
   fs.writeFileSync(NATIVE_GATE_PID_FILE, String(pid));
+
+  // The WMI-launched wrapper (see comment above) exits the moment the real
+  // proxy process does, so a proxy that crashes on startup shows up here as
+  // the pid going straight back to dead. Catch that instead of leaving a
+  // stale pid file behind pointing at nothing while callers believe the
+  // gate is up (production incident: this silently left auth-gate 502ing).
+  const deadline = Date.now() + 2000;
+  while (isAlive(pid) && Date.now() < deadline) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  if (!isAlive(pid)) {
+    try { fs.unlinkSync(NATIVE_GATE_PID_FILE); } catch {}
+    let log = '';
+    try { log = fs.readFileSync(NATIVE_GATE_LOG_FILE, 'utf8').trim(); } catch {}
+    throw new Error(`auth-gate proxy exited immediately after spawn${log ? `: ${log}` : ' (empty log)'}`);
+  }
 }
 
 function reloadNativeGate() {

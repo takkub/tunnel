@@ -323,11 +323,22 @@ function resolveCredentialsFile(tunnelDir, configPath) {
 const posixSpawnedChildren = new Map();
 
 function spawnDetached(bin, args, { cwd, env, logFile } = {}) {
+  // Launching ourselves (process.execPath, to run a plain node script
+  // detached) must not let a packaged Electron binary come up as a second
+  // full Electron app instead of "just run this script": confirmed root
+  // cause of a production incident where the auth-gate proxy died within
+  // ~1s of every boot. The WMI path below (Windows) starts the new process
+  // with none of our own env — not even by inheritance — so a caller-set
+  // ELECTRON_RUN_AS_NODE is silently dropped unless threaded through
+  // explicitly here; the POSIX fallback already inherits process.env in
+  // full, but setting it unconditionally keeps both paths honest regardless
+  // of future changes there. Harmless (ignored) when bin is a plain node.
+  const effectiveEnv = bin === process.execPath ? { ELECTRON_RUN_AS_NODE: '1', ...env } : env;
   let pid;
   if (process.platform === 'win32') {
     try {
       const dq = s => `"${String(s).replace(/"/g, '""')}"`;
-      const setPrefix = Object.entries(env || {})
+      const setPrefix = Object.entries(effectiveEnv || {})
         .map(([k, v]) => `set ${dq(`${k}=${v}`)} && `)
         .join('');
       const cdPrefix = cwd ? `cd /d ${dq(cwd)} && ` : '';
@@ -365,7 +376,7 @@ function spawnDetached(bin, args, { cwd, env, logFile } = {}) {
     const logFd = fs.openSync(logFile, 'a');
     const proc = spawn(bin, args, {
       cwd,
-      env: env ? { ...process.env, ...env } : undefined,
+      env: effectiveEnv ? { ...process.env, ...effectiveEnv } : undefined,
       // detached so the tunnel outlives this process; on POSIX this also makes
       // proc.pid a process-group leader, letting nativeStop kill the whole group.
       detached: true,
@@ -622,6 +633,7 @@ module.exports = {
   rewriteIngressHostForMode,
   spawnDetached,
   killDetached,
+  isAlive,
   nativeStart,
   nativeStop,
   nativeStatus,

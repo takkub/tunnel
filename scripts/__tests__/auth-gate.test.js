@@ -491,3 +491,22 @@ test('ensureNativeGateRunning() launches a process that survives a taskkill-styl
   assert.ok(reaped, 'stopNativeGateIfIdle() should fully reap the gate process, not just drop the pid file');
   assert.equal(fs.existsSync(pidFile), false);
 });
+
+// Production incident: the gate proxy died within ~1s of every spawn (missing
+// ELECTRON_RUN_AS_NODE launched a second Electron GUI instance that hit the
+// single-instance lock and quit) but ensureNativeGateRunning() never noticed —
+// it wrote the pid file and returned, leaving callers believing the gate was
+// up while nothing listened on its port. Stand in for that crash with a
+// proxy script that exits immediately instead of actually mocking Electron.
+test('ensureNativeGateRunning() throws (and clears the pid file) when the proxy process dies immediately after spawn', async (t) => {
+  const root = makeTempRoot();
+  const proxyScript = path.join(root, 'scripts', 'auth-gate-proxy.js');
+  fs.writeFileSync(proxyScript, "process.stderr.write('boom: simulated startup crash\\n'); process.exit(1);\n");
+
+  const { ensureNativeGateRunning, nativeGateRunning } = loadAuthGate(root);
+  t.after(() => { try { require(path.join(root, 'scripts', 'auth-gate.js')).stopNativeGateIfIdle(); } catch {} });
+
+  assert.throws(() => ensureNativeGateRunning(), /exited immediately after spawn.*boom: simulated startup crash/s);
+  assert.equal(nativeGateRunning(), false);
+  assert.equal(fs.existsSync(path.join(root, 'runtime', 'auth-gate', '.pid')), false, 'a crashed proxy must not leave a stale pid file behind');
+});
