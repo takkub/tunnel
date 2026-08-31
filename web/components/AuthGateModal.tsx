@@ -9,6 +9,11 @@ interface Props {
   onClose: () => void
 }
 
+function formatHHmm(iso: string): string {
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 export default function AuthGateModal({ tunnelName, tunnelRunning, onSuccess, onError, onClose }: Props) {
   const [loadingState, setLoadingState] = useState(true)
   const [initialEnabled, setInitialEnabled] = useState(false)
@@ -20,6 +25,8 @@ export default function AuthGateModal({ tunnelName, tunnelRunning, onSuccess, on
   const [confirmDisable, setConfirmDisable] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedLogins24h, setFailedLogins24h] = useState(0)
+  const [lockedUntil, setLockedUntil] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/tunnels/${tunnelName}/auth-gate`)
@@ -27,10 +34,14 @@ export default function AuthGateModal({ tunnelName, tunnelRunning, onSuccess, on
       .then(data => {
         setInitialEnabled(!!data.enabled)
         setEnabled(!!data.enabled)
+        setFailedLogins24h(data.failedLogins24h ?? 0)
+        setLockedUntil(data.lockedUntil ?? null)
       })
       .catch(() => {})
       .finally(() => setLoadingState(false))
   }, [tunnelName])
+
+  const isLocked = !!lockedUntil && new Date(lockedUntil).getTime() > Date.now()
 
   const needsPassword = enabled && (!initialEnabled || changingPassword)
   const passwordValid = !needsPassword || (password.length > 0 && password === confirmPassword)
@@ -51,8 +62,10 @@ export default function AuthGateModal({ tunnelName, tunnelRunning, onSuccess, on
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data: { error?: string; restartError?: string } = await res.json()
+      const data: { error?: string; restartError?: string; lockedUntil?: string | null; failedLogins24h?: number } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'เกิดข้อผิดพลาด')
+      if (data.lockedUntil !== undefined) setLockedUntil(data.lockedUntil)
+      if (data.failedLogins24h !== undefined) setFailedLogins24h(data.failedLogins24h)
       if (data.restartError) {
         onSuccess(
           `ตั้งค่า gate แล้วแต่ restart tunnel ไม่สำเร็จ: ${data.restartError} — traffic ยังใช้ config เก่า กด "รีสตาร์ท" ที่การ์ด`,
@@ -158,6 +171,17 @@ export default function AuthGateModal({ tunnelName, tunnelRunning, onSuccess, on
                   )}
                 </div>
               </>
+            )}
+
+            {enabled && initialEnabled && (failedLogins24h > 0 || isLocked) && (
+              <div className="flex items-center justify-between gap-2 text-xs bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
+                <span className="text-zinc-400">ล็อกอินผิด 24 ชม.: {failedLogins24h} ครั้ง</span>
+                {isLocked && lockedUntil && (
+                  <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 font-medium">
+                    ถูกล็อกชั่วคราวถึง {formatHHmm(lockedUntil)}
+                  </span>
+                )}
+              </div>
             )}
 
             <p className="text-xs text-zinc-500">

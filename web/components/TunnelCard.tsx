@@ -73,6 +73,7 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
   const [showLog, setShowLog] = useState(false)
   const [autostart, setAutostart] = useState(tunnel.autostart ?? false)
   const [savingAutostart, setSavingAutostart] = useState(false)
+  const [gateLockedUntil, setGateLockedUntil] = useState<string | null>(null)
 
   const busy = busyAction !== null
   const hasHostname = !!(tunnel.hostname && tunnel.hostname !== 'cfd')
@@ -86,6 +87,24 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
   useEffect(() => {
     setAutostart(tunnel.autostart ?? false)
   }, [tunnel.autostart])
+
+  useEffect(() => {
+    if (!tunnel.authGate?.enabled) {
+      setGateLockedUntil(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/tunnels/${tunnel.name}/auth-gate`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        setGateLockedUntil(data.lockedUntil ?? null)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [tunnel.name, tunnel.authGate?.enabled, showAuthGate])
+
+  const gateLocked = !!gateLockedUntil && new Date(gateLockedUntil).getTime() > Date.now()
 
   const toggleAutostart = async () => {
     const next = !autostart
@@ -178,11 +197,11 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
     }`}>
       <div className="p-3 space-y-2.5">
         {/* Header */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-zinc-100 text-sm truncate">{tunnel.name}</p>
             {hasHostname && (
-              <div className="flex items-center gap-1 mt-0.5">
+              <div className="flex items-center flex-wrap gap-1 gap-y-1 mt-0.5">
                 <p className="text-xs text-zinc-500 truncate">{tunnel.hostname}</p>
                 <button
                   onClick={copyHostname}
@@ -210,10 +229,15 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
                     🔒 Password
                   </span>
                 )}
+                {tunnel.authGate?.enabled && gateLocked && (
+                  <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
+                    ล็อกชั่วคราว
+                  </span>
+                )}
               </div>
             )}
             {!hasHostname && (tunnel.port != null || tunnel.authGate?.enabled) && (
-              <div className="flex items-center gap-1 mt-0.5">
+              <div className="flex items-center flex-wrap gap-1 gap-y-1 mt-0.5">
                 {tunnel.port != null && (
                   <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 inline-block">
                     :{tunnel.port}
@@ -222,6 +246,11 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
                 {tunnel.authGate?.enabled && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
                     🔒 Password
+                  </span>
+                )}
+                {tunnel.authGate?.enabled && gateLocked && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
+                    ล็อกชั่วคราว
                   </span>
                 )}
               </div>
