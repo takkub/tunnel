@@ -152,7 +152,7 @@ export default function NginxPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-7xl mx-auto space-y-4">
       {/* Header */}
       <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5">
         <h2 className="font-semibold text-zinc-200 mb-1">Nginx Reverse Proxy</h2>
