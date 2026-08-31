@@ -136,7 +136,7 @@ function notifyDownloaded(version: string): void {
     .then(({ response }) => {
       if (response === 0) {
         const autoUpdater = loadAutoUpdater()
-        autoUpdater?.quitAndInstall()
+        autoUpdater?.quitAndInstall(true, true)
       }
     })
 }
@@ -165,7 +165,7 @@ export function pollUpdateRequests(): NodeJS.Timeout {
       checkForUpdatesManual()
     } else if (request.action === 'install') {
       const autoUpdater = loadAutoUpdater()
-      autoUpdater?.quitAndInstall()
+      autoUpdater?.quitAndInstall(true, true)
     }
   }, POLL_INTERVAL_MS)
 }

@@ -113,11 +113,16 @@ is logged to the console and mirrored into
 `<TUNNEL_DATA_DIR>/update-status.json` (`{ state, version, currentVersion,
 percent, message, at }`), which `GET /api/desktop/update` reads back for the
 Settings page to poll while a check/download is in flight. Once a download
-finishes, a dialog offers "Restart now" (`autoUpdater.quitAndInstall()`) or
-"Later"; the Settings page's "Restart to update" button posts
-`{ action: 'install' }` to reach the same `quitAndInstall()` from the web UI.
-`src/update-status.js` (the shared read/write logic for both files) is
-electron-free and unit-tested directly — see
+finishes, a dialog offers "Restart now" (`autoUpdater.quitAndInstall(true,
+true)`) or "Later"; the Settings page's "Restart to update" button posts
+`{ action: 'install' }` to reach the same `quitAndInstall(true, true)` from
+the web UI. Both calls pass `isSilent: true` so the NSIS installer runs with
+`/S` and no UI (the Windows build is `nsis.oneClick: true`, so even a
+non-silent run would never show the multi-page "Choose Installation
+Options" wizard) and `isForceRunAfter: true` so the app relaunches itself
+once the install finishes — the user never sees anything past the "Restart
+now" dialog. `src/update-status.js` (the shared read/write logic for both
+files) is electron-free and unit-tested directly — see
 `src/__tests__/update-status.test.js`.
 
 ## Signing

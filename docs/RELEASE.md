@@ -26,6 +26,18 @@ npm run release -- major   # 1.0.0 -> 2.0.0 (breaking change)
 
 `.github/workflows/ci.yml` รัน `npm run verify` (typecheck ของ web + `node --test`) บน Node 20 — ไม่ build installer เพราะไม่ต้องรอ build เต็มทุก PR
 
+## Windows installer / auto-update
+
+`desktop/package.json`'s `build.nsis` ใช้ `oneClick: true` + `perMachine:
+false` — installer ที่ build ออกมาลงที่ `%LOCALAPPDATA%\Programs\Tunnel
+Manager` (per-user) แบบ one-click ไม่มี wizard ("Choose Installation
+Options") ให้กดเลย ทั้งตอนติดตั้งครั้งแรกและตอน auto-update
+(`autoUpdater.quitAndInstall(true, true)` ใน `desktop/src/updater.ts` สั่ง
+installer รันแบบ `/S` เงียบ ๆ แล้ว relaunch แอปเองหลังติดตั้งเสร็จ) — user
+ไม่ต้องเห็น/กดอะไรเพิ่มหลังกด "Restart now" macOS ยังใช้ `.dmg` เดิม ไม่มี
+auto-run ฝั่งนั้น (ผู้ใช้ลากแอปลง Applications เอง) จึง Gatekeeper workaround
+ด้านล่างยังใช้เหมือนเดิม
+
 ## ⚠️ TODO: Code signing / Notarization
 
 Workflow ปัจจุบัน build ได้แต่**ไม่ได้ sign** — จะได้ installer ที่ไม่มี code signature (Windows SmartScreen เตือน, macOS Gatekeeper บล็อก ต้อง right-click → Open)
