@@ -5,15 +5,17 @@
 // settings.ts's watchDesktopSettings polls settings.json, and every
 // autoUpdater event — including the silent auto-check at launch — is mirrored
 // into update-status.json for the web UI (and the tray) to read back.
-import { app, dialog, Notification, Tray } from 'electron'
+import { app, Notification, Tray } from 'electron'
 import { TUNNEL_DATA_DIR } from './server'
 import { readUpdateRequest, writeUpdateStatus } from './update-status'
 
 const POLL_INTERVAL_MS = 2000
+const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 let autoUpdaterRef: import('electron-updater').AppUpdater | null = null
 let trayRef: Tray | null = null
 let lastRequestAt = -1
+let onDownloadedCallback: ((version: string) => void) | null = null
 
 function loadAutoUpdater(): import('electron-updater').AppUpdater | null {
   if (autoUpdaterRef) return autoUpdaterRef
@@ -35,9 +37,11 @@ function setStatus(update: Parameters<typeof writeUpdateStatus>[1]) {
 
 // Registers autoUpdater's event listeners once, mirroring every event into
 // update-status.json. Safe to call even when unpackaged/unavailable — it
-// no-ops in that case.
-export function initUpdater(tray: Tray | null): void {
+// no-ops in that case. `onDownloaded` fires once a download finishes so the
+// caller (main.ts) can add a tray-menu "install" item — there is no dialog.
+export function initUpdater(tray: Tray | null, onDownloaded?: (version: string) => void): void {
   trayRef = tray
+  onDownloadedCallback = onDownloaded ?? null
   const autoUpdater = loadAutoUpdater()
   if (!autoUpdater) return
 
@@ -63,7 +67,8 @@ export function initUpdater(tray: Tray | null): void {
   autoUpdater.on('update-downloaded', info => {
     console.log('[updater] update-downloaded', info.version)
     setStatus({ state: 'downloaded', version: info.version, percent: 100 })
-    notifyDownloaded(info.version)
+    trayRef?.setToolTip(`Tunnel Manager — อัปเดต v${info.version} พร้อมติดตั้ง`)
+    onDownloadedCallback?.(info.version)
   })
   autoUpdater.on('error', err => {
     console.error('[updater] error', err.message)
@@ -123,22 +128,19 @@ export function checkForUpdatesManual(): void {
   checkForUpdates()
 }
 
-function notifyDownloaded(version: string): void {
-  dialog
-    .showMessageBox({
-      type: 'info',
-      title: 'อัปเดตพร้อมติดตั้ง',
-      message: `ดาวน์โหลดเวอร์ชัน v${version} เสร็จแล้ว — รีสตาร์ทเพื่อติดตั้งตอนนี้เลยไหม?`,
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-    })
-    .then(({ response }) => {
-      if (response === 0) {
-        const autoUpdater = loadAutoUpdater()
-        autoUpdater?.quitAndInstall(true, true)
-      }
-    })
+// Quits and installs an already-downloaded update — reached from the tray's
+// "ติดตั้งอัปเดต vX" item and from POST /api/desktop/update { action: 'install' }
+// (via pollUpdateRequests below). isSilent+isForceRunAfter matches the NSIS
+// one-click config: no installer UI, app relaunches itself once done.
+export function installUpdate(): void {
+  const autoUpdater = loadAutoUpdater()
+  autoUpdater?.quitAndInstall(true, true)
+}
+
+// Re-checks every 6h in addition to the launch-time check, so a long-running
+// session still picks up updates without the user opening the tray menu.
+export function startPeriodicChecks(): NodeJS.Timeout {
+  return setInterval(checkForUpdates, CHECK_INTERVAL_MS)
 }
 
 function notify(title: string, body: string): void {
@@ -164,8 +166,7 @@ export function pollUpdateRequests(): NodeJS.Timeout {
     if (request.action === 'check') {
       checkForUpdatesManual()
     } else if (request.action === 'install') {
-      const autoUpdater = loadAutoUpdater()
-      autoUpdater?.quitAndInstall(true, true)
+      installUpdate()
     }
   }, POLL_INTERVAL_MS)
 }

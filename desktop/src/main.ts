@@ -4,12 +4,20 @@ import { startServer, stopServer } from './server'
 import { startAllTunnels, stopAllTunnels } from './tunnels'
 import { runAutostartTunnels, formatAutostartSummary, AutostartSummary } from './autostart'
 import { readDesktopSettings, applyLoginItemSettings, watchDesktopSettings } from './settings'
-import { initUpdater, checkForUpdatesManual, checkForUpdates, pollUpdateRequests } from './updater'
+import {
+  initUpdater,
+  checkForUpdatesManual,
+  checkForUpdates,
+  pollUpdateRequests,
+  installUpdate,
+  startPeriodicChecks,
+} from './updater'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let serverUrl = ''
 let quitting = false
+let downloadedUpdateVersion: string | null = null
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -50,8 +58,12 @@ async function bootstrap() {
 
   createWindow(shouldStartHidden())
   createTray()
-  initUpdater(tray)
+  initUpdater(tray, version => {
+    downloadedUpdateVersion = version
+    rebuildTrayMenu()
+  })
   pollUpdateRequests()
+  startPeriodicChecks()
   autostartTunnelsIfEnabled()
   checkForUpdates()
 }
@@ -118,6 +130,15 @@ function rebuildTrayMenu(busy = false) {
       enabled: !busy,
       click: () => checkForUpdatesManual(),
     },
+    ...(downloadedUpdateVersion
+      ? [
+          {
+            label: `ติดตั้งอัปเดต v${downloadedUpdateVersion}`,
+            enabled: !busy,
+            click: () => installUpdate(),
+          },
+        ]
+      : []),
     { type: 'separator' },
     {
       label: 'Start All Tunnels',

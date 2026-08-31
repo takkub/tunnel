@@ -112,18 +112,29 @@ Every `autoUpdater` event — `checking-for-update`, `update-available`,
 is logged to the console and mirrored into
 `<TUNNEL_DATA_DIR>/update-status.json` (`{ state, version, currentVersion,
 percent, message, at }`), which `GET /api/desktop/update` reads back for the
-Settings page to poll while a check/download is in flight. Once a download
-finishes, a dialog offers "Restart now" (`autoUpdater.quitAndInstall(true,
-true)`) or "Later"; the Settings page's "Restart to update" button posts
-`{ action: 'install' }` to reach the same `quitAndInstall(true, true)` from
-the web UI. Both calls pass `isSilent: true` so the NSIS installer runs with
-`/S` and no UI (the Windows build is `nsis.oneClick: true`, so even a
-non-silent run would never show the multi-page "Choose Installation
-Options" wizard) and `isForceRunAfter: true` so the app relaunches itself
-once the install finishes — the user never sees anything past the "Restart
-now" dialog. `src/update-status.js` (the shared read/write logic for both
-files) is electron-free and unit-tested directly — see
-`src/__tests__/update-status.test.js`.
+Settings page to poll while a check/download is in flight. **There is no
+native "Restart now / Later" dialog** — once a download finishes,
+`update-status.json` flips to `state: 'downloaded'` and the tray tooltip
+changes to `Tunnel Manager — อัปเดต vX พร้อมติดตั้ง`; the user installs
+whenever they choose, via either:
+
+- **Settings page → App box**'s "Restart to update" button, which posts
+  `{ action: 'install' }` to `POST /api/desktop/update` — polled by
+  `pollUpdateRequests()` the same way as `{ action: 'check' }`.
+- **Tray → "ติดตั้งอัปเดต vX"**, a menu item that only appears once a download
+  has finished (added by `initUpdater()`'s `onDownloaded` callback in
+  `main.ts`, which rebuilds the tray menu).
+
+Both paths call the same `installUpdate()` in `src/updater.ts`
+(`autoUpdater.quitAndInstall(true, true)`): `isSilent: true` so the NSIS
+installer runs with `/S` and no UI (the Windows build is also
+`nsis.oneClick: true`, so even a non-silent run would never show the
+multi-page "Choose Installation Options" wizard), and `isForceRunAfter: true`
+so the app relaunches itself once the install finishes. In addition to the
+launch-time check, `startPeriodicChecks()` re-runs `checkForUpdates()` every
+6h so a long-running session still picks up updates. `src/update-status.js`
+(the shared read/write logic for both files) is electron-free and
+unit-tested directly — see `src/__tests__/update-status.test.js`.
 
 ## Signing
 
