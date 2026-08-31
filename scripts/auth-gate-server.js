@@ -18,11 +18,13 @@ const {
   ensureSecretFile,
   SEVEN_DAYS,
 } = require('./auth-gate-crypto');
+const { createLockoutTracker, renderLockout } = require('./auth-gate-lockout');
 
 const ROOT = path.join(__dirname, '..');
 const DEFAULT_TUNNELS_DIR = path.join(ROOT, 'tunnels');
 const DEFAULT_TEMPLATE_PATH = path.join(ROOT, 'nginx', 'auth-gate', 'login.html');
 const DEFAULT_SECRET_FILE = path.join(ROOT, 'nginx', 'auth-gate', '.secret');
+const DEFAULT_RUNTIME_DIR = path.join(ROOT, 'runtime', 'auth-gate');
 
 const FALLBACK_TEMPLATE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>{{tunnel}} - Sign in</title></head>
@@ -39,6 +41,14 @@ const FALLBACK_TEMPLATE = `<!doctype html>
 
 function createRateLimiter(maxAttempts, windowMs) {
   const hits = new Map();
+  // Without this the map grows forever — one entry per distinct client IP
+  // that has ever POSTed /login, never freed. Sweeping expired entries once
+  // per window keeps it bounded to roughly the current window's traffic.
+  const sweepTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [key, rec] of hits) if (now > rec.resetAt) hits.delete(key);
+  }, windowMs);
+  if (sweepTimer.unref) sweepTimer.unref();
   return {
     allow(key) {
       const now = Date.now();
@@ -51,6 +61,7 @@ function createRateLimiter(maxAttempts, windowMs) {
       rec.count++;
       return true;
     },
+    stop() { clearInterval(sweepTimer); },
   };
 }
 
@@ -113,9 +124,13 @@ function buildClearCookie(tunnelName) {
   return `${cookieName(tunnelName)}=; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=0`;
 }
 
+// cf-connecting-ip is set by Cloudflare on every request that reaches us
+// through the tunnel and can't be spoofed by the client (Cloudflare overwrites
+// it). x-forwarded-for, by contrast, is client-supplied and was letting an
+// attacker rotate it per request to dodge the rate limiter entirely.
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return fwd.split(',')[0].trim();
+  const cf = req.headers['cf-connecting-ip'];
+  if (cf) return String(cf).split(',')[0].trim();
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -125,6 +140,7 @@ function createHandler(opts = {}) {
   const secretFile = opts.secretFile || DEFAULT_SECRET_FILE;
   const secret = opts.secret || process.env.GATE_SECRET || process.env.SESSION_SECRET || ensureSecretFile(secretFile);
   const rateLimiter = opts.rateLimiter || createRateLimiter(5, 60 * 1000);
+  const lockout = opts.lockoutTracker || createLockoutTracker({ runtimeDir: opts.runtimeDir || DEFAULT_RUNTIME_DIR, now: opts.now });
 
   return async function handler(req, res) {
     let url;
@@ -156,6 +172,12 @@ function createHandler(opts = {}) {
     if (req.method === 'POST' && url.pathname === '/login') {
       if (!tunnelName) { res.writeHead(400); res.end('missing tunnel'); return; }
 
+      if (lockout.isLocked(tunnelName)) {
+        res.writeHead(429, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(renderLockout(lockout.lockRemainingMinutes(tunnelName)));
+        return;
+      }
+
       if (!rateLimiter.allow(clientIp(req))) {
         res.writeHead(429, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(renderLogin(templatePath, { tunnel: tunnelName, error: 'Too many attempts. Try again in a minute.', next: '/' }));
@@ -171,8 +193,16 @@ function createHandler(opts = {}) {
 
       const state = readState(tunnelsDir, tunnelName);
       if (state && state.enabled && verifyPassword(password, state.passwordHash)) {
+        lockout.recordSuccess(tunnelName);
         res.writeHead(302, { 'Set-Cookie': buildSessionCookie(tunnelName, secret), Location: next });
         res.end();
+        return;
+      }
+
+      lockout.recordFailure(tunnelName, { ip: clientIp(req), country: req.headers['cf-ipcountry'], ua: req.headers['user-agent'] });
+      if (lockout.isLocked(tunnelName)) {
+        res.writeHead(429, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(renderLockout(lockout.lockRemainingMinutes(tunnelName)));
         return;
       }
 

@@ -11,7 +11,7 @@ const { hashPassword, signSession, cookieName } = require('../auth-gate-crypto')
 
 const SECRET = 'test-secret';
 
-function makeTunnel(tunnelsDir, name, { hostname, originalService, password }) {
+function makeTunnel(tunnelsDir, name, { hostname, originalService, password, allowedCountries }) {
   const dir = path.join(tunnelsDir, name);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'auth-gate.json'), JSON.stringify({
@@ -20,6 +20,7 @@ function makeTunnel(tunnelsDir, name, { hostname, originalService, password }) {
     originalService,
     gatePort: 8890,
     hostname,
+    allowedCountries: allowedCountries || [],
   }));
 }
 
@@ -152,6 +153,57 @@ test('a cookie signed for a different tunnel does not grant access', async () =>
     assert.equal(res.status, 302);
     assert.match(res.headers.location, /^\/__gate\/login/);
   } finally { await stop(close); }
+});
+
+test('a request from a country outside the allowlist gets a bilingual 403, even with a valid session cookie', async () => {
+  const { port, tunnelsDir, reload, close } = await startProxy();
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', { hostname: 'pay.example.com', originalService: 'http://127.0.0.1:1', password: 'secret123', allowedCountries: ['TH'] });
+    reload();
+    const cookie = `${cookieName('promptpay')}=${signSession('promptpay', SECRET, 3600)}`;
+    const res = await req(port, { path: '/', headers: { Host: 'pay.example.com', Cookie: cookie, 'CF-IPCountry': 'US' } });
+    assert.equal(res.status, 403);
+    assert.match(res.body, /ไม่อนุญาตให้เข้าถึงจากประเทศนี้/);
+    assert.match(res.body, /not allowed/);
+  } finally { await stop(close); }
+});
+
+test('a request from an allowed country reaches the origin as normal', async () => {
+  const origin = await startOrigin((req, res) => { res.writeHead(200); res.end('ok'); });
+  const { port, tunnelsDir, reload, close } = await startProxy();
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', { hostname: 'pay.example.com', originalService: `http://127.0.0.1:${origin.address().port}`, password: 'secret123', allowedCountries: ['TH', 'US'] });
+    reload();
+    const cookie = `${cookieName('promptpay')}=${signSession('promptpay', SECRET, 3600)}`;
+    const res = await req(port, { path: '/', headers: { Host: 'pay.example.com', Cookie: cookie, 'CF-IPCountry': 'TH' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body, 'ok');
+  } finally { await stop(close); origin.close(); }
+});
+
+test('the country block also applies to the gate\'s own login page, before it ever renders', async () => {
+  const { port, tunnelsDir, reload, close } = await startProxy();
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', { hostname: 'pay.example.com', originalService: 'http://127.0.0.1:1', password: 'secret123', allowedCountries: ['TH'] });
+    reload();
+    const res = await req(port, { path: '/__gate/login', headers: { Host: 'pay.example.com', 'CF-IPCountry': 'RU' } });
+    assert.equal(res.status, 403);
+  } finally { await stop(close); }
+});
+
+// (The "missing header from a non-local address" case is covered at the unit
+// level in auth-gate-country.test.js — this suite's client always connects
+// over loopback, so that scenario can't be reproduced over a real socket here.)
+test('a missing cf-ipcountry header from the loopback address is allowed (local dev bypass)', async () => {
+  const origin = await startOrigin((req, res) => { res.writeHead(200); res.end('ok'); });
+  const { port, tunnelsDir, reload, close } = await startProxy();
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', { hostname: 'pay.example.com', originalService: `http://127.0.0.1:${origin.address().port}`, password: 'secret123', allowedCountries: ['TH'] });
+    reload();
+    const cookie = `${cookieName('promptpay')}=${signSession('promptpay', SECRET, 3600)}`;
+    const res = await req(port, { path: '/', headers: { Host: 'pay.example.com', Cookie: cookie } });
+    assert.equal(res.status, 200);
+  } finally { await stop(close); origin.close(); }
 });
 
 test('two enabled tunnels share one proxy process, routed independently by Host header', async () => {

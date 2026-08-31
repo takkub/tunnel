@@ -24,6 +24,9 @@ const {
   killDetached,
 } = require('./runtime');
 const { hashPassword, ensureSecretFile } = require('./auth-gate-crypto');
+const { assertValidCountries } = require('./auth-gate-country');
+const { readPersistedState } = require('./auth-gate-lockout');
+const cfRule = require('./auth-gate-cf-rule');
 
 const NGINX_AUTH_GATE_DIR = path.join(ROOT, 'nginx', 'auth-gate');
 const CONFD_DIR = path.join(NGINX_AUTH_GATE_DIR, 'conf.d');
@@ -64,7 +67,7 @@ function getStatePath(name) {
 
 function readState(name) {
   const p = getStatePath(name);
-  const empty = { enabled: false, passwordHash: null, originalService: null, gatePort: null };
+  const empty = { enabled: false, passwordHash: null, originalService: null, gatePort: null, allowedCountries: [], cfRuleId: null };
   if (!fs.existsSync(p)) return empty;
   try {
     return { ...empty, ...JSON.parse(fs.readFileSync(p, 'utf8')) };
@@ -159,9 +162,22 @@ function ensureDefaultServerFile() {
   fs.writeFileSync(p, `server {\n    listen 80 default_server;\n    server_name _;\n    return 444;\n}\n`);
 }
 
-function writeGateConfig(name, hostname, originalService) {
+// $http_cf_ipcountry comes from Cloudflare on every request proxied through
+// the tunnel; blocking on it here means a disallowed country never even
+// reaches auth_request, matching the native proxy's check in auth-gate-proxy.js.
+function countryCheckSnippet(allowedCountries) {
+  const list = (allowedCountries || []).map(c => String(c).toUpperCase()).filter(c => /^[A-Z]{2}$/.test(c));
+  if (!list.length) return '';
+  return `        if ($http_cf_ipcountry !~ ^(${list.join('|')})$) {
+            return 403;
+        }
+`;
+}
+
+function writeGateConfig(name, hostname, originalService, allowedCountries) {
   fs.mkdirSync(CONFD_DIR, { recursive: true });
   const svcPort = getGateServicePort();
+  const countryCheck = countryCheckSnippet(allowedCountries);
   const conf = `server {
     listen 80;
     server_name ${hostname};
@@ -169,7 +185,7 @@ function writeGateConfig(name, hostname, originalService) {
     port_in_redirect off;
 
     location / {
-        auth_request /__gate/verify;
+${countryCheck}        auth_request /__gate/verify;
         error_page 401 = @login;
 
         proxy_pass ${originalService};
@@ -192,7 +208,7 @@ function writeGateConfig(name, hostname, originalService) {
     }
 
     location /__gate/ {
-        proxy_pass http://host.docker.internal:${svcPort}/;
+${countryCheck}        proxy_pass http://host.docker.internal:${svcPort}/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -202,7 +218,13 @@ function writeGateConfig(name, hostname, originalService) {
     location @login {
         return 302 /__gate/login?next=$request_uri;
     }
-}
+${countryCheck ? `
+    error_page 403 = @country_blocked;
+    location @country_blocked {
+        default_type text/html;
+        return 403 "<!doctype html><html><head><meta charset=\\"utf-8\\"><title>Access denied</title></head><body><h1>403</h1><p>ไม่อนุญาตให้เข้าถึงจากประเทศนี้ ($http_cf_ipcountry)</p><p>Access from this country is not allowed ($http_cf_ipcountry).</p></body></html>";
+    }
+` : ''}}
 `;
   fs.writeFileSync(path.join(CONFD_DIR, `${name}.conf`), conf);
   ensureUpgradeMapFile();
@@ -242,6 +264,7 @@ function writeComposeFile() {
       - ../../scripts:/app/scripts:ro
       - ../../tunnels:/app/tunnels:ro
       - ../../nginx:/app/nginx:ro
+      - ../../runtime/auth-gate:/app/runtime/auth-gate
 `;
   fs.writeFileSync(COMPOSE_FILE, compose);
 }
@@ -261,6 +284,7 @@ function ensureGateRunningInContainer() {
   const hostScriptsDir = getHostProjectDir() + '/scripts';
   const hostTunnelsDir = getHostProjectDir() + '/tunnels';
   const hostNginxDir = getHostProjectDir() + '/nginx';
+  const hostRuntimeDir = getHostProjectDir() + '/runtime/auth-gate';
   const port = getGatePort();
   const svcPort = getGateServicePort();
 
@@ -292,6 +316,7 @@ function ensureGateRunningInContainer() {
     ` -v "${hostScriptsDir}:/app/scripts:ro"` +
     ` -v "${hostTunnelsDir}:/app/tunnels:ro"` +
     ` -v "${hostNginxDir}:/app/nginx:ro"` +
+    ` -v "${hostRuntimeDir}:/app/runtime/auth-gate"` +
     ` -w /app` +
     ` node:alpine` +
     ` node /app/scripts/auth-gate-server.js`,
@@ -311,6 +336,7 @@ function ensureGateRunningHost() {
 
 function ensureGateRunning() {
   fs.mkdirSync(CONFD_DIR, { recursive: true });
+  fs.mkdirSync(RUNTIME_AUTH_GATE_DIR, { recursive: true });
   ensureUpgradeMapFile();
   ensureDefaultServerFile();
   ensureSecretFile(SECRET_FILE);
@@ -443,7 +469,7 @@ function enable(name, password, opts) {
       reloadNativeGate();
     }
   } else {
-    writeGateConfig(name, hostname, state.originalService);
+    writeGateConfig(name, hostname, state.originalService, state.allowedCountries);
     if (!opts.skipDocker) {
       ensureGateRunning();
       reloadGate();
@@ -506,15 +532,75 @@ function changePassword(name, password, opts) {
   return status(name);
 }
 
+// Country allowlist for the gate itself (app-layer, always in effect once
+// set) — separate from and independent of the optional Cloudflare WAF rule
+// (setCloudflareBlock), which is a stronger but off-by-default extra layer.
+function setCountries(name, countries, opts) {
+  opts = opts || {};
+  assertValidName(name);
+  const list = assertValidCountries(countries || []);
+  const state = readState(name);
+  state.allowedCountries = list;
+  writeState(name, state);
+
+  if (state.enabled) {
+    const mode = getEffectiveMode();
+    if (mode === 'native') {
+      if (!opts.skipDocker) reloadNativeGate();
+    } else if (state.hostname) {
+      writeGateConfig(name, state.hostname, state.originalService, list);
+      if (!opts.skipDocker) reloadGate();
+    }
+  }
+
+  return status(name);
+}
+
+// Optional Cloudflare-side block, layered on top of setCountries — see
+// auth-gate-cf-rule.js. Network call, so this is the one auth-gate.js action
+// that's async; enable/disable/changePassword/setCountries stay synchronous.
+async function setCloudflareBlock(name, wantEnabled) {
+  assertValidName(name);
+  const state = readState(name);
+
+  if (!wantEnabled) {
+    if (!state.cfRuleId) return status(name);
+    const res = await cfRule.removeCountryRule(state.cfRuleId);
+    if (!res.ok) return { ...status(name), cfError: res.error };
+    state.cfRuleId = null;
+    writeState(name, state);
+    return status(name);
+  }
+
+  if (!state.enabled || !state.hostname) {
+    throw new Error(`Auth gate not enabled for ${name} — enable it before adding a Cloudflare country block`);
+  }
+  const res = await cfRule.upsertCountryRule(name, state.hostname, state.allowedCountries, state.cfRuleId);
+  if (!res.ok) return { ...status(name), cfError: res.error };
+  state.cfRuleId = res.ruleId;
+  writeState(name, state);
+  return status(name);
+}
+
 function status(name) {
   const state = readState(name);
-  return { enabled: !!state.enabled, gatePort: state.enabled ? state.gatePort : null };
+  const lockout = state.enabled ? readPersistedState(RUNTIME_AUTH_GATE_DIR, name) : { lockedUntil: null, failedLogins24h: 0 };
+  return {
+    enabled: !!state.enabled,
+    gatePort: state.enabled ? state.gatePort : null,
+    allowedCountries: state.allowedCountries || [],
+    cloudflareBlock: !!state.cfRuleId,
+    failedLogins24h: lockout.failedLogins24h,
+    lockedUntil: lockout.lockedUntil,
+  };
 }
 
 module.exports = {
   enable,
   disable,
   changePassword,
+  setCountries,
+  setCloudflareBlock,
   status,
   readState,
   rewriteServiceForHostname,
@@ -528,21 +614,31 @@ module.exports = {
   stopNativeGateIfIdle,
 };
 
+function parseCsvArg(raw) {
+  if (!raw || raw === '-') return [];
+  return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+
 if (require.main === module) {
-  const [action, name, password] = process.argv.slice(2);
-  try {
-    let result;
-    if (action === 'enable') result = enable(name, password);
-    else if (action === 'disable') result = disable(name);
-    else if (action === 'change-password') result = changePassword(name, password);
-    else if (action === 'status') result = status(name);
-    else {
-      process.stderr.write('Usage: node auth-gate.js <enable|disable|change-password|status> <tunnelName> [password]\n');
+  (async () => {
+    const [action, name, ...rest] = process.argv.slice(2);
+    try {
+      let result;
+      if (action === 'enable') result = enable(name, rest[0]);
+      else if (action === 'disable') result = disable(name);
+      else if (action === 'change-password') result = changePassword(name, rest[0]);
+      else if (action === 'status') result = status(name);
+      else if (action === 'set-countries') result = setCountries(name, parseCsvArg(rest[0]));
+      else if (action === 'cf-country-rule') result = await setCloudflareBlock(name, rest[0] === 'on');
+      else {
+        process.stderr.write('Usage: node auth-gate.js <enable|disable|change-password|status|set-countries|cf-country-rule> <tunnelName> [arg]\n');
+        process.exit(1);
+        return;
+      }
+      process.stdout.write(JSON.stringify(result) + '\n');
+    } catch (e) {
+      process.stderr.write((e instanceof Error ? e.message : String(e)) + '\n');
       process.exit(1);
     }
-    process.stdout.write(JSON.stringify(result) + '\n');
-  } catch (e) {
-    process.stderr.write((e instanceof Error ? e.message : String(e)) + '\n');
-    process.exit(1);
-  }
+  })();
 }

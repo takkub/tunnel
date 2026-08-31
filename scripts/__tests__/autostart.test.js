@@ -8,7 +8,10 @@ const path = require('path');
 // TUNNEL_ROOT/TUNNEL_DATA_DIR at require time — each test loads a fresh copy
 // under its own temp root, forced into native mode (this sandbox has Docker
 // available, so getEffectiveMode() would otherwise pick 'docker').
-const COPIED_FILES = ['autostart.js', 'tunnel-meta.js', 'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js'];
+const COPIED_FILES = [
+  'autostart.js', 'tunnel-meta.js', 'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js',
+  'auth-gate-country.js', 'auth-gate-lockout.js', 'auth-gate-cf-rule.js', 'cloudflare-api.js', 'settings-store.js', 'domains.js',
+];
 
 function makeTempRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'autostart-test-root-'));

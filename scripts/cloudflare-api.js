@@ -272,6 +272,8 @@ module.exports = {
   listDnsRecords,
   findTunnelCnameRecords,
   deleteTunnelCnames,
-  upsertTunnelCname
+  upsertTunnelCname,
+  cfApiRequest,
+  formatCfErrors
 };
 
