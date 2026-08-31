@@ -36,7 +36,7 @@ const ORIGIN_ERROR_RE = /unable to reach the origin service/i;
 // cloudflared's edge connections retry-and-recover on their own — these ERR
 // lines are noise from that churn, not a tunnel-level problem. Only
 // credentials/registration/config errors below stay tunnel-level (lastError).
-const BENIGN_ERR_RE = /failed to refresh dns local resolver|failed to refresh feature selector|failed to run the datagram handler|failed to accept incoming stream requests|failed to serve tunnel connection|serve tunnel error|connection terminated|failed to dial a quic connection/i;
+const BENIGN_ERR_RE = /failed to refresh dns local resolver|failed to refresh feature selector|failed to run the datagram handler|failed to accept incoming stream requests|failed to serve tunnel connection|serve tunnel error|connection terminated|failed to dial a quic connection|canceled by remote|stream \d+ canceled/i;
 
 // Parses a text log (or tail of one) into current connection state.
 // Returns activeConnections clamped to [0,4] per cloudflared's max of 4 edge connections.

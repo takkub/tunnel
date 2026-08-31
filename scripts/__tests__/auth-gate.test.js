@@ -223,6 +223,73 @@ test('disable() in native mode restores ingress and clears state without touchin
   assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null });
 });
 
+function makeSleeperBin() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-gate-sleeper-'));
+  if (process.platform === 'win32') {
+    const cmdPath = path.join(dir, 'sleeper.cmd');
+    fs.writeFileSync(cmdPath, '@echo off\r\n:loop\r\nping -n 2 127.0.0.1 >nul\r\ngoto loop\r\n');
+    return cmdPath;
+  }
+  const scriptPath = path.join(dir, 'sleeper.js');
+  fs.writeFileSync(scriptPath, '#!/usr/bin/env node\nsetInterval(() => {}, 1e9);\n');
+  fs.chmodSync(scriptPath, 0o755);
+  return scriptPath;
+}
+
+async function waitFor(predicate, { timeoutMs = 3000, intervalMs = 100 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) return true;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return predicate();
+}
+
+// Regression test for the incident this task fixes: enabling the gate on an
+// already-running tunnel used to rewrite config.yml + auth-gate.json but never
+// touch the live cloudflared process, so it kept serving the *old* (pre-gate)
+// ingress — the UI showed a "Password" badge while public traffic bypassed
+// the gate entirely. restartTunnelIfRunning() must actually stop+start it.
+test('enable() restarts an already-running native tunnel so the rewritten (gated) ingress actually takes effect', async (t) => {
+  const root = makeTempRoot();
+  forceNativeMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  fs.writeFileSync(path.join(root, 'tunnels', 'promptpay', 'fake-id.json'), '{}');
+  const { enable } = loadAuthGate(root);
+
+  const runtime = require(path.join(root, 'scripts', 'runtime.js'));
+  const cloudflaredBin = require(path.join(root, 'scripts', 'cloudflared-bin.js'));
+  t.mock.method(cloudflaredBin, 'getCloudflaredPath', () => makeSleeperBin());
+
+  const beforePid = runtime.nativeStart('promptpay');
+  t.after(() => { try { runtime.nativeStop('promptpay'); } catch {} });
+  assert.ok(await waitFor(() => { try { process.kill(beforePid, 0); return true; } catch { return false; } }));
+
+  const result = enable('promptpay', 'secret123', { skipDocker: true });
+  assert.equal(result.restartError, undefined);
+
+  // The pre-gate process must be gone, replaced by a new one under the rewritten config.
+  const oldGone = await waitFor(() => { try { process.kill(beforePid, 0); return false; } catch { return true; } }, { timeoutMs: 5000 });
+  assert.ok(oldGone, 'the process running under the old (pre-gate) ingress should have been stopped');
+  assert.equal(runtime.nativeStatus('promptpay'), true);
+
+  const configText = fs.readFileSync(path.join(root, 'tunnels', 'promptpay', 'config.yml'), 'utf8');
+  assert.match(configText, /service: http:\/\/localhost:8890/);
+});
+
+test('enable()/disable() do not attempt a restart, and add no restartError, when the tunnel is not running', () => {
+  const root = makeTempRoot();
+  forceNativeMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, disable } = loadAuthGate(root);
+
+  const enableResult = enable('promptpay', 'secret123', { skipDocker: true });
+  assert.equal('restartError' in enableResult, false);
+
+  const disableResult = disable('promptpay', { skipDocker: true });
+  assert.equal('restartError' in disableResult, false);
+});
+
 test('enable() honors TUNNEL_DATA_DIR for tunnels/ resolution', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-gate-data-'));

@@ -334,6 +334,66 @@ test('nativeStart()-spawned child survives its parent process exiting outright',
   assert.ok(alive, 'grandchild should still be alive after its spawning process exited');
 });
 
+test('nativeRunningDetail(): no .pid file but a matching process on the command line -> foreign', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
+  const runtime = loadRuntime(root, dataDir);
+
+  const processes = [
+    { pid: 4242, cmdline: 'cloudflared.exe tunnel --config tunnels\\tak888\\config.yml --credentials-file x.json run' },
+    { pid: 9999, cmdline: 'cloudflared.exe tunnel --config tunnels\\other\\config.yml --credentials-file x.json run' },
+  ];
+
+  const detail = runtime.nativeRunningDetail('tak888', processes);
+  assert.deepEqual(detail, { running: true, pid: 4242, foreign: true });
+  assert.equal(runtime.nativeRunning('tak888', processes), true);
+
+  // forward-slash cmdline form (e.g. from a Unix launcher) is matched too
+  const fwdProcesses = [{ pid: 111, cmdline: 'cloudflared tunnel --config tunnels/tak888/config.yml run' }];
+  assert.deepEqual(runtime.nativeRunningDetail('tak888', fwdProcesses), { running: true, pid: 111, foreign: true });
+
+  // no matching process at all -> not running
+  assert.deepEqual(runtime.nativeRunningDetail('tak888', [{ pid: 1, cmdline: 'something else entirely' }]),
+    { running: false, pid: null, foreign: false });
+  assert.deepEqual(runtime.nativeRunningDetail('tak888', []), { running: false, pid: null, foreign: false });
+});
+
+test('nativeRunningDetail(): a live .pid-recorded process is reported as managed, not foreign, even with a foreign process also in the list', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
+  const runtime = loadRuntime(root, dataDir);
+
+  const runDir = runtime.getRuntimeDir('demo');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, '.pid'), String(process.pid));
+
+  const processes = [{ pid: 5555, cmdline: 'cloudflared.exe tunnel --config tunnels\\demo\\config.yml run' }];
+  assert.deepEqual(runtime.nativeRunningDetail('demo', processes), { running: true, pid: process.pid, foreign: false });
+});
+
+test('nativeRunningDetail(): a stale .pid file falls back to the process scan and reports foreign', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
+  const runtime = loadRuntime(root, dataDir);
+
+  const runDir = runtime.getRuntimeDir('demo');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, '.pid'), '999999999'); // dead pid
+
+  const processes = [{ pid: 4242, cmdline: 'cloudflared.exe tunnel --config tunnels\\demo\\config.yml run' }];
+  assert.deepEqual(runtime.nativeRunningDetail('demo', processes), { running: true, pid: 4242, foreign: true });
+});
+
+test('nativeStop() on a foreign (no .pid file) process falls through cleanly (nothing to unlink, no throw)', () => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
+  const runtime = loadRuntime(root, dataDir);
+
+  // No .pid file and no real matching OS process for 'ghost' — nativeStop()
+  // must not throw just because there's nothing tracked or found to kill.
+  assert.doesNotThrow(() => runtime.nativeStop('ghost'));
+});
+
 test('generateLaunchers() resolves relative credential paths against TUNNEL_DATA_DIR, not TUNNEL_ROOT', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));

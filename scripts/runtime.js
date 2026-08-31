@@ -204,39 +204,65 @@ function getDockerContainerNames() {
   }
 }
 
-// Fetch all running cloudflared process command lines at once — call once, reuse across tunnels
+// Fetch all running cloudflared process pid+command lines at once — call once, reuse across tunnels.
+// pid is needed (not just cmdline) so a "foreign" process (see nativeRunningDetail) can actually be
+// killed — matching by cmdline alone isn't enough to act on it.
 function getCloudflaredProcesses() {
   try {
     if (process.platform === 'win32') {
       const r = spawnSync('powershell', [
         '-NoProfile', '-NonInteractive', '-Command',
-        "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'cloudflared.exe' } | ForEach-Object { $_.CommandLine }",
+        "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'cloudflared.exe' } | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }",
       ], { encoding: 'utf8', timeout: 10000 });
       if (!r.stdout) return [];
-      return r.stdout.split('\n').filter(l => l.trim()).map(l => ({ cmdline: l.trim() }));
+      return r.stdout.split('\n').filter(l => l.trim()).map(l => {
+        const idx = l.indexOf('\t');
+        const pid = parseInt(l.slice(0, idx), 10);
+        return { pid: Number.isFinite(pid) ? pid : null, cmdline: l.slice(idx + 1).trim() };
+      });
     } else {
-      const r = spawnSync('ps', ['-eo', 'args'], { encoding: 'utf8', timeout: 5000 });
+      const r = spawnSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8', timeout: 5000 });
       if (!r.stdout) return [];
-      return r.stdout.split('\n').filter(l => l.includes('cloudflared')).map(l => ({ cmdline: l.trim() }));
+      return r.stdout.split('\n')
+        .filter(l => l.includes('cloudflared'))
+        .map(l => {
+          const m = l.trim().match(/^(\d+)\s+(.*)$/);
+          if (!m) return null;
+          return { pid: parseInt(m[1], 10), cmdline: m[2] };
+        })
+        .filter(Boolean);
     }
   } catch {
     return [];
   }
 }
 
-// Check if a tunnel is running natively — checks .pid first, then falls back to process scan.
+// Check if a tunnel is running natively, and whether it's a process this app is tracking
+// (a .pid file we wrote) or a "foreign" one — a live cloudflared process whose command line
+// references this tunnel's config.yml, found only by scanning processes because we never
+// recorded its pid (e.g. started via the generated start.bat/start.sh launcher, or a manual
+// cloudflared invocation). Foreign processes are real and running, but this app can't stop or
+// restart them via the .pid file it doesn't have — callers that need to act on the process
+// (nativeStop, auth-gate's restart-on-toggle) need `pid` to do so; callers that only care about
+// its running/foreign booleans should use `nativeRunning()` below.
 // Pass the result of getCloudflaredProcesses() so we only spawn once per status cycle.
-function nativeRunning(name, processes) {
+function nativeRunningDetail(name, processes) {
   const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (fs.existsSync(pidFile)) {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-    try { process.kill(pid, 0); return true; } catch {}
+    try { process.kill(pid, 0); return { running: true, pid, foreign: false }; } catch {}
     // stale .pid — fall through to process scan
   }
-  if (!processes || !processes.length) return false;
+  if (!processes || !processes.length) return { running: false, pid: null, foreign: false };
   const fragment = path.join('tunnels', name, 'config.yml');   // OS-native separators
   const fragmentFwd = `tunnels/${name}/config.yml`;             // forward-slash form (launchers)
-  return processes.some(p => p.cmdline.includes(fragment) || p.cmdline.includes(fragmentFwd));
+  const match = processes.find(p => p.cmdline.includes(fragment) || p.cmdline.includes(fragmentFwd));
+  if (!match) return { running: false, pid: null, foreign: false };
+  return { running: true, pid: Number.isFinite(match.pid) ? match.pid : null, foreign: true };
+}
+
+function nativeRunning(name, processes) {
+  return nativeRunningDetail(name, processes).running;
 }
 
 // Filenames that live in a tunnel dir but are never a credentials file —
@@ -447,13 +473,22 @@ function killDetached(pid) {
 
 function nativeStop(name) {
   const pidFile = path.join(getRuntimeDir(name), '.pid');
-  if (!fs.existsSync(pidFile)) return; // already stopped
-  const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-  // Only discard our record of this pid once it's confirmed dead — losing
-  // the pid file for a process that's still actually running (kill failed)
-  // would make status checks silently forget about it.
-  if (!killDetached(pid)) return;
-  try { fs.unlinkSync(pidFile); } catch {}
+  if (fs.existsSync(pidFile)) {
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+    // Only discard our record of this pid once it's confirmed dead — losing
+    // the pid file for a process that's still actually running (kill failed)
+    // would make status checks silently forget about it.
+    if (!killDetached(pid)) return;
+    try { fs.unlinkSync(pidFile); } catch {}
+    return;
+  }
+  // No .pid file — but a foreign (app-unmanaged) cloudflared process for this
+  // tunnel may still be running (see nativeRunningDetail). Without this, stop
+  // silently no-ops while that process keeps serving traffic on stale ingress.
+  const detail = nativeRunningDetail(name, getCloudflaredProcesses());
+  if (detail.running && detail.foreign && Number.isFinite(detail.pid)) {
+    killDetached(detail.pid);
+  }
 }
 
 function nativeStatus(name) {
@@ -574,6 +609,7 @@ module.exports = {
   nativeStatus,
   getCloudflaredProcesses,
   nativeRunning,
+  nativeRunningDetail,
   getTunnelNames,
   getDockerTunnelNames,
   generateLaunchers,

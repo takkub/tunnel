@@ -11,7 +11,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const {
   TUNNELS_DIR, getRuntimeDir,
-  dockerStatus, nativeRunning, getCloudflaredProcesses, getDockerContainerNames,
+  dockerStatus, nativeRunningDetail, getCloudflaredProcesses, getDockerContainerNames,
 } = require('./runtime');
 const { parseLogText, deriveHealth } = require('./health-log-parser');
 
@@ -58,16 +58,6 @@ function nativePidFile(name) {
   return path.join(getRuntimeDir(name), '.pid');
 }
 
-function readNativePid(name) {
-  try {
-    const raw = fs.readFileSync(nativePidFile(name), 'utf8').trim();
-    const pid = parseInt(raw, 10);
-    return Number.isFinite(pid) ? pid : null;
-  } catch {
-    return null;
-  }
-}
-
 function dockerStartedAtSec(name) {
   try {
     const r = spawnSync('docker', ['inspect', '-f', '{{.State.StartedAt}}', `cloudflared-tunnel-${name}`], {
@@ -94,8 +84,17 @@ function getSharedState() {
 function getTunnelHealth(name, shared) {
   const { nativeProcesses, dockerNames } = shared || getSharedState();
   const isDocker = dockerNames.has(`cloudflared-tunnel-${name}`);
-  const isNative = !isDocker && nativeRunning(name, nativeProcesses);
+  // A "foreign" process is a live cloudflared for this tunnel that this app never
+  // recorded a .pid for (started outside the app — e.g. the generated start.bat/
+  // start.sh launcher, or a manual cloudflared invocation). It's genuinely running,
+  // but this app can't restart/reload it the way it can one it manages — reported
+  // as its own health state below instead of silently reading as "connecting"
+  // forever (the log tail we'd read is our own app-managed .log, which a foreign
+  // process never wrote to).
+  const nativeDetail = isDocker ? { running: false, pid: null, foreign: false } : nativeRunningDetail(name, nativeProcesses);
+  const isNative = !isDocker && nativeDetail.running;
   const running = isDocker || isNative;
+  const foreignPid = isNative && nativeDetail.foreign ? nativeDetail.pid : null;
 
   let logText, logPath, pid, uptimeSec;
   if (isDocker) {
@@ -106,15 +105,15 @@ function getTunnelHealth(name, shared) {
   } else {
     logPath = nativeLogPath(name);
     logText = readFileTail(logPath);
-    pid = isNative ? readNativePid(name) : null;
+    pid = isNative ? nativeDetail.pid : null;
     uptimeSec = null;
-    if (isNative) {
+    if (isNative && !nativeDetail.foreign) {
       try { uptimeSec = Math.max(0, Math.round((Date.now() - fs.statSync(nativePidFile(name)).mtimeMs) / 1000)); } catch {}
     }
   }
 
   const parsed = parseLogText(logText);
-  const health = deriveHealth({
+  const health = foreignPid != null ? 'foreign' : deriveHealth({
     running,
     activeConnections: parsed.activeConnections,
     lastErrorAt: parsed.lastErrorAt,
@@ -156,6 +155,7 @@ function getTunnelHealth(name, shared) {
     lastWarning: parsed.lastWarning,
     lastEventAt: parsed.lastEventAt,
     pid,
+    foreignPid,
     uptimeSec,
     logPath,
   };

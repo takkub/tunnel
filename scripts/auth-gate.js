@@ -16,9 +16,10 @@ const {
   dockerStatus,
   dockerStop,
   dockerStart,
-  nativeStatus,
+  nativeRunning,
   nativeStop,
   nativeStart,
+  getCloudflaredProcesses,
 } = require('./runtime');
 const { hashPassword, ensureSecretFile } = require('./auth-gate-crypto');
 
@@ -372,22 +373,32 @@ function stopNativeGateIfIdle() {
   try { fs.unlinkSync(NATIVE_GATE_PID_FILE); } catch {}
 }
 
-// Best-effort: config.yml and gate state are already persisted by the time this runs,
-// so a hiccup restarting the live tunnel process shouldn't fail the whole enable/disable —
-// the new ingress takes effect on whatever next restarts the tunnel.
+// config.yml and gate state are already persisted by the time this runs, so a
+// restart failure doesn't lose the toggle itself — but it does mean the live
+// process is still serving the *old* ingress (pre-gate, for enable; still
+// gated, for disable), so callers must surface `error` rather than swallow it:
+// a silently-failed restart previously showed a "Password" badge with the app
+// convinced the gate was live while public traffic kept hitting the tunnel
+// directly. nativeRunning() (unlike a bare pid-file check) also catches a
+// "foreign" cloudflared process this app never recorded a .pid for — e.g.
+// started via the generated start.bat/start.sh launcher, or a manual
+// cloudflared invocation — so that case gets a real stop+start instead of a
+// silent no-op too (nativeStop() knows how to find and kill it).
 function restartTunnelIfRunning(name) {
   try {
     if (dockerStatus(name)) {
       dockerStop(name);
       dockerStart(name);
-      return;
+      return { restarted: true };
     }
-    if (nativeStatus(name)) {
+    if (nativeRunning(name, getCloudflaredProcesses())) {
       nativeStop(name);
       nativeStart(name);
+      return { restarted: true };
     }
+    return { restarted: false }; // not running — nothing to restart, not an error
   } catch (e) {
-    process.stderr.write(`Warning: failed to restart tunnel '${name}': ${e.message}\n`);
+    return { restarted: false, error: e.message };
   }
 }
 
@@ -431,9 +442,9 @@ function enable(name, password, opts) {
       reloadGate();
     }
   }
-  if (!opts.skipTunnelRestart) restartTunnelIfRunning(name);
+  const restart = opts.skipTunnelRestart ? { restarted: false } : restartTunnelIfRunning(name);
 
-  return status(name);
+  return restart.error ? { ...status(name), restartError: restart.error } : status(name);
 }
 
 function disable(name, opts) {
@@ -463,9 +474,9 @@ function disable(name, opts) {
       reloadGate();
     }
   }
-  if (!opts.skipTunnelRestart) restartTunnelIfRunning(name);
+  const restart = opts.skipTunnelRestart ? { restarted: false } : restartTunnelIfRunning(name);
 
-  return status(name);
+  return restart.error ? { ...status(name), restartError: restart.error } : status(name);
 }
 
 function changePassword(name, password, opts) {
