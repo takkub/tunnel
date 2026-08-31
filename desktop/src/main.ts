@@ -196,9 +196,12 @@ async function runTrayAction(label: string, action: () => Promise<void>) {
 function autostartTunnelsIfEnabled() {
   if (readDesktopSettings().autostartTunnelsOnLaunch === false) return
   runAutostartTunnels()
-    .then(summary => showAutostartNotification(summary))
+    .then(summary => {
+      log(`[autostart] ${formatAutostartSummary(summary)}`)
+      showAutostartNotification(summary)
+    })
     .catch(err => {
-      console.error('[autostart]', (err as Error).message)
+      log(`[autostart] failed: ${(err as Error).message}`)
       if (Notification.isSupported()) {
         new Notification({ title: 'Autostart Tunnels — failed', body: (err as Error).message }).show()
       }

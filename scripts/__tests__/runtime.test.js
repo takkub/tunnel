@@ -334,6 +334,35 @@ test('nativeStart()-spawned child survives its parent process exiting outright',
   assert.ok(alive, 'grandchild should still be alive after its spawning process exited');
 });
 
+// Production incident: spawnDetached(process.execPath, ...) with no explicit
+// ELECTRON_RUN_AS_NODE let a packaged Electron binary come up as a second
+// full GUI app instead of running the target script as plain node — on
+// win32 the WMI launch path hands the new process none of our own env, not
+// even by inheritance, so a caller that forgot to set it got silently
+// dropped. spawnDetached() must inject it itself whenever bin is
+// process.execPath, regardless of what the caller passed.
+test('spawnDetached() injects ELECTRON_RUN_AS_NODE into the child env when bin is process.execPath', async (t) => {
+  const root = makeTempRoot();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
+  const runtime = loadRuntime(root, dataDir);
+
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-probe-'));
+  const outFile = path.join(probeDir, 'env-out.txt');
+  const probeScript = path.join(probeDir, 'probe.js');
+  fs.writeFileSync(
+    probeScript,
+    `require('fs').writeFileSync(${JSON.stringify(outFile)}, process.env.ELECTRON_RUN_AS_NODE || 'MISSING');\n`
+  );
+  const logFile = path.join(probeDir, 'spawn.log');
+
+  const pid = runtime.spawnDetached(process.execPath, [probeScript], { logFile });
+  t.after(() => forceKill(pid));
+
+  const wrote = await waitFor(() => fs.existsSync(outFile));
+  assert.ok(wrote, `child never wrote its env marker file — log: ${fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '(none)'}`);
+  assert.equal(fs.readFileSync(outFile, 'utf8'), '1');
+});
+
 test('nativeRunningDetail(): no .pid file but a matching process on the command line -> foreign', () => {
   const root = makeTempRoot();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-test-data-'));
