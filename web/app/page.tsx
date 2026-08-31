@@ -21,7 +21,7 @@ type FilterType = 'all' | 'running' | 'stopped'
 export default function DashboardPage() {
   const [tunnels, setTunnels] = useState<Tunnel[]>([])
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null)
   const [busy, setBusy] = useState<'start' | 'stop' | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [effectiveMode, setEffectiveMode] = useState<string | null>(null)
@@ -70,9 +70,9 @@ export default function DashboardPage() {
     return () => { clearInterval(interval); clearInterval(healthInterval) }
   }, [])
 
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), type === 'warning' ? 7000 : 4000)
   }
 
   const handleStartAll = async () => {

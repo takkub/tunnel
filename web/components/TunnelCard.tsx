@@ -19,7 +19,7 @@ interface Props {
   tunnel: Tunnel
   health?: TunnelHealth
   onRefresh: () => void
-  onToast: (msg: string, type: 'success' | 'error') => void
+  onToast: (msg: string, type: 'success' | 'error' | 'warning') => void
 }
 
 function formatUptime(sec: number): string {
@@ -62,7 +62,7 @@ function formatAgeSec(sec: number): string {
 }
 
 export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props) {
-  const [busyAction, setBusyAction] = useState<'start' | 'stop' | 'delete' | null>(null)
+  const [busyAction, setBusyAction] = useState<'start' | 'stop' | 'delete' | 'restart' | null>(null)
   const [showDns, setShowDns] = useState(false)
   const [dnsHost, setDnsHost] = useState('')
   const [dnsLoading, setDnsLoading] = useState(false)
@@ -113,7 +113,7 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
     }
   }
 
-  const action = async (type: 'start' | 'stop' | 'delete') => {
+  const action = async (type: 'start' | 'stop' | 'delete' | 'restart') => {
     setBusyAction(type)
     const method = type === 'delete' ? 'DELETE' : 'POST'
     const url = type === 'delete'
@@ -268,6 +268,23 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
           <p className="text-[11px] text-zinc-600 truncate" title={health.originError.message}>
             origin error ล่าสุด {formatAgeSec(health.originError.ageSec)}ที่แล้ว
           </p>
+        )}
+
+        {healthState === 'foreign' && (
+          <div className="flex items-start justify-between gap-2 -mt-1.5">
+            <p className="text-xs text-violet-400 leading-snug">
+              process นี้ start นอกแอป — restart เพื่อให้แอปดูแล
+              {health?.foreignPid != null && ` (pid ${health.foreignPid})`}
+            </p>
+            <button
+              onClick={() => action('restart')}
+              disabled={busy}
+              className="flex-shrink-0 min-h-[32px] px-2.5 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-400 text-[11px] font-semibold hover:bg-violet-500 hover:text-white hover:border-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 flex items-center gap-1.5"
+            >
+              {busyAction === 'restart' && <span className="w-2.5 h-2.5 border-2 border-violet-400/30 border-t-violet-300 rounded-full animate-spin" />}
+              รีสตาร์ท
+            </button>
+          </div>
         )}
 
         {/* Actions row */}
@@ -460,9 +477,10 @@ export default function TunnelCard({ tunnel, health, onRefresh, onToast }: Props
       {showAuthGate && (
         <AuthGateModal
           tunnelName={tunnel.name}
-          onSuccess={async msg => {
+          tunnelRunning={tunnel.running || healthState === 'foreign'}
+          onSuccess={async (msg, type = 'success') => {
             setShowAuthGate(false)
-            onToast(msg, 'success')
+            onToast(msg, type)
             await onRefresh()
           }}
           onError={msg => onToast(msg, 'error')}

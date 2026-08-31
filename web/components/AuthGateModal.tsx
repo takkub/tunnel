@@ -3,12 +3,13 @@ import { useState, useEffect } from 'react'
 
 interface Props {
   tunnelName: string
-  onSuccess: (msg: string) => void
+  tunnelRunning?: boolean
+  onSuccess: (msg: string, type?: 'success' | 'warning') => void
   onError: (msg: string) => void
   onClose: () => void
 }
 
-export default function AuthGateModal({ tunnelName, onSuccess, onError, onClose }: Props) {
+export default function AuthGateModal({ tunnelName, tunnelRunning, onSuccess, onError, onClose }: Props) {
   const [loadingState, setLoadingState] = useState(true)
   const [initialEnabled, setInitialEnabled] = useState(false)
   const [enabled, setEnabled] = useState(false)
@@ -50,9 +51,17 @@ export default function AuthGateModal({ tunnelName, onSuccess, onError, onClose 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
+      const data: { error?: string; restartError?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'เกิดข้อผิดพลาด')
-      onSuccess(enabled ? 'เปิดใช้งาน password login page แล้ว' : 'ปิดใช้งาน password login page แล้ว')
+      if (data.restartError) {
+        onSuccess(
+          `ตั้งค่า gate แล้วแต่ restart tunnel ไม่สำเร็จ: ${data.restartError} — traffic ยังใช้ config เก่า กด "รีสตาร์ท" ที่การ์ด`,
+          'warning'
+        )
+        return
+      }
+      const base = enabled ? 'เปิดใช้งาน password login page แล้ว' : 'ปิดใช้งาน password login page แล้ว'
+      onSuccess(tunnelRunning ? `${base} restart tunnel ให้แล้ว` : base)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด'
       setError(msg)
