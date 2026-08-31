@@ -13,7 +13,10 @@ function makeTempRoot() {
   fs.mkdirSync(path.join(dir, 'tunnels'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'nginx', 'auth-gate'), { recursive: true });
-  const files = ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'auth-gate-proxy.js', 'auth-gate-server.js'];
+  const files = [
+    'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'auth-gate-proxy.js', 'auth-gate-server.js',
+    'auth-gate-country.js', 'auth-gate-lockout.js', 'auth-gate-cf-rule.js', 'cloudflare-api.js', 'settings-store.js', 'domains.js',
+  ];
   for (const f of files) {
     fs.copyFileSync(path.join(__dirname, '..', f), path.join(dir, 'scripts', f));
   }
@@ -22,7 +25,10 @@ function makeTempRoot() {
 
 function loadAuthGate(root) {
   const modPath = path.join(root, 'scripts', 'auth-gate.js');
-  const files = ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'auth-gate-proxy.js', 'auth-gate-server.js'];
+  const files = [
+    'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'auth-gate-proxy.js', 'auth-gate-server.js',
+    'auth-gate-country.js', 'auth-gate-lockout.js', 'auth-gate-cf-rule.js', 'cloudflare-api.js', 'settings-store.js', 'domains.js',
+  ];
   for (const f of files) {
     delete require.cache[require.resolve(path.join(root, 'scripts', f))];
   }
@@ -60,7 +66,7 @@ test('status() returns disabled defaults when no state file exists', () => {
   const root = makeTempRoot();
   writeConfig(root, 'promptpay', 'pay.example.com', 4000);
   const { status } = loadAuthGate(root);
-  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null });
+  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null, allowedCountries: [], cloudflareBlock: false, failedLogins24h: 0, lockedUntil: null });
 });
 
 test('enable() rewrites ingress service to the gate port and saves originalService', () => {
@@ -98,7 +104,7 @@ test('disable() restores the original ingress service and clears state', () => {
   const configText = fs.readFileSync(path.join(root, 'tunnels', 'promptpay', 'config.yml'), 'utf8');
   assert.match(configText, /service: http:\/\/host\.docker\.internal:4000/);
   assert.equal(configText.includes('8890'), false);
-  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null });
+  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null, allowedCountries: [], cloudflareBlock: false, failedLogins24h: 0, lockedUntil: null });
   assert.equal(fs.existsSync(path.join(root, 'nginx', 'auth-gate', 'conf.d', 'promptpay.conf')), false);
 });
 
@@ -222,7 +228,7 @@ test('disable() in native mode restores ingress and clears state without touchin
 
   const configText = fs.readFileSync(path.join(root, 'tunnels', 'promptpay', 'config.yml'), 'utf8');
   assert.match(configText, /service: http:\/\/host\.docker\.internal:4000/);
-  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null });
+  assert.deepEqual(status('promptpay'), { enabled: false, gatePort: null, allowedCountries: [], cloudflareBlock: false, failedLogins24h: 0, lockedUntil: null });
 });
 
 function makeSleeperBin() {
@@ -290,6 +296,116 @@ test('enable()/disable() do not attempt a restart, and add no restartError, when
 
   const disableResult = disable('promptpay', { skipDocker: true });
   assert.equal('restartError' in disableResult, false);
+});
+
+test('status() includes the new security fields with sensible disabled/enabled defaults', () => {
+  const root = makeTempRoot();
+  forceDockerMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, status } = loadAuthGate(root);
+
+  enable('promptpay', 'secret123', NO_DOCKER);
+  const s = status('promptpay');
+  assert.deepEqual(s.allowedCountries, []);
+  assert.equal(s.cloudflareBlock, false);
+  assert.equal(s.failedLogins24h, 0);
+  assert.equal(s.lockedUntil, null);
+});
+
+test('setCountries() rejects an invalid code or too many countries', () => {
+  const root = makeTempRoot();
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCountries } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+
+  assert.throws(() => setCountries('promptpay', ['th', '1x']), /invalid code/);
+  assert.throws(() => setCountries('promptpay', Array(21).fill('TH')), /max 20/);
+});
+
+test('setCountries() persists the (uppercased) list and reflects it in status()', () => {
+  const root = makeTempRoot();
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCountries, status } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+
+  setCountries('promptpay', ['th', 'us'], NO_DOCKER);
+  assert.deepEqual(status('promptpay').allowedCountries, ['TH', 'US']);
+});
+
+test('setCountries() in docker mode embeds a cf-ipcountry check in the tunnel\'s nginx conf', () => {
+  const root = makeTempRoot();
+  forceDockerMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCountries } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+
+  setCountries('promptpay', ['th', 'us'], NO_DOCKER);
+  const conf = fs.readFileSync(path.join(root, 'nginx', 'auth-gate', 'conf.d', 'promptpay.conf'), 'utf8');
+  assert.match(conf, /if \(\$http_cf_ipcountry !~ \^\(TH\|US\)\$\) \{/);
+  assert.match(conf, /ไม่อนุญาตให้เข้าถึงจากประเทศนี้/);
+});
+
+test('setCountries() with an empty list removes the country check from the nginx conf', () => {
+  const root = makeTempRoot();
+  forceDockerMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCountries } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+  setCountries('promptpay', ['th'], NO_DOCKER);
+  setCountries('promptpay', [], NO_DOCKER);
+  const conf = fs.readFileSync(path.join(root, 'nginx', 'auth-gate', 'conf.d', 'promptpay.conf'), 'utf8');
+  assert.equal(conf.includes('http_cf_ipcountry'), false);
+});
+
+test('setCountries() in native mode does not touch nginx conf.d', () => {
+  const root = makeTempRoot();
+  forceNativeMode(root);
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCountries, status } = loadAuthGate(root);
+  enable('promptpay', 'secret123', { skipDocker: true });
+  setCountries('promptpay', ['th'], { skipDocker: true });
+
+  assert.equal(fs.existsSync(path.join(root, 'nginx', 'auth-gate', 'conf.d', 'promptpay.conf')), false);
+  assert.deepEqual(status('promptpay').allowedCountries, ['TH']);
+});
+
+test('setCountries() rejects an invalid tunnel name', () => {
+  const root = makeTempRoot();
+  const { setCountries } = loadAuthGate(root);
+  assert.throws(() => setCountries('../evil', ['TH']), /Invalid tunnel name/);
+});
+
+test('setCloudflareBlock(true) without a configured Cloudflare token surfaces cfError instead of throwing, and cloudflareBlock stays false', async () => {
+  const root = makeTempRoot();
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCloudflareBlock, status } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+
+  const prevToken = process.env.CLOUDFLARE_API_TOKEN;
+  const prevZone = process.env.ZONE_ID;
+  delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.ZONE_ID;
+  try {
+    const res = await setCloudflareBlock('promptpay', true);
+    assert.equal(res.cloudflareBlock, false);
+    assert.match(res.cfError, /Cloudflare API token/);
+    assert.equal(status('promptpay').cloudflareBlock, false);
+  } finally {
+    if (prevToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN; else process.env.CLOUDFLARE_API_TOKEN = prevToken;
+    if (prevZone === undefined) delete process.env.ZONE_ID; else process.env.ZONE_ID = prevZone;
+  }
+});
+
+test('setCloudflareBlock(false) with no rule ever set is a no-op (no network call attempted)', async () => {
+  const root = makeTempRoot();
+  writeConfig(root, 'promptpay', 'pay.example.com', 4000);
+  const { enable, setCloudflareBlock, status } = loadAuthGate(root);
+  enable('promptpay', 'secret123', NO_DOCKER);
+
+  const res = await setCloudflareBlock('promptpay', false);
+  assert.equal(res.cloudflareBlock, false);
+  assert.equal('cfError' in res, false);
+  assert.equal(status('promptpay').cloudflareBlock, false);
 });
 
 test('enable() honors TUNNEL_DATA_DIR for tunnels/ resolution', () => {

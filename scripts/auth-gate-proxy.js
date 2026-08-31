@@ -11,6 +11,7 @@ const path = require('path');
 const { URL } = require('url');
 const { createHandler, parseCookies } = require('./auth-gate-server');
 const { verifySession, cookieName, ensureSecretFile } = require('./auth-gate-crypto');
+const { isCountryAllowed, renderCountryBlocked } = require('./auth-gate-country');
 
 const ROOT = path.join(__dirname, '..');
 const TUNNEL_ROOT = process.env.TUNNEL_ROOT || ROOT;
@@ -36,7 +37,7 @@ function buildRoutingTable(tunnelsDir) {
     let state;
     try { state = JSON.parse(fs.readFileSync(path.join(dir, 'auth-gate.json'), 'utf8')); } catch { continue; }
     if (!state.enabled || !state.hostname || !state.originalService) continue;
-    table.set(state.hostname, { name, originalService: state.originalService });
+    table.set(state.hostname, { name, originalService: state.originalService, allowedCountries: state.allowedCountries || [] });
   }
   return table;
 }
@@ -106,12 +107,22 @@ function createProxy(opts = {}) {
   let routes = buildRoutingTable(tunnelsDir);
   function reload() { routes = buildRoutingTable(tunnelsDir); }
 
-  const gateHandler = createHandler({ tunnelsDir, secret, loginTemplatePath: templatePath });
+  const runtimeDir = opts.runtimeDir || DEFAULT_RUNTIME_DIR;
+  const gateHandler = createHandler({ tunnelsDir, secret, loginTemplatePath: templatePath, runtimeDir });
 
   async function handle(req, res) {
     const host = (req.headers.host || '').split(':')[0];
     const route = routes.get(host);
     if (!route) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Unknown host'); return; }
+
+    // Country check runs ahead of everything else, including the gate's own
+    // login/verify paths — a blocked visitor shouldn't even see the login form.
+    const country = req.headers['cf-ipcountry'];
+    if (!isCountryAllowed(route.allowedCountries, country, req.socket.remoteAddress)) {
+      res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderCountryBlocked(country));
+      return;
+    }
 
     let url;
     try { url = new URL(req.url, 'http://internal'); } catch { res.writeHead(400); res.end(); return; }
@@ -145,6 +156,7 @@ function createProxy(opts = {}) {
     const host = (req.headers.host || '').split(':')[0];
     const route = routes.get(host);
     if (!route) { socket.destroy(); return; }
+    if (!isCountryAllowed(route.allowedCountries, req.headers['cf-ipcountry'], req.socket.remoteAddress)) { socket.destroy(); return; }
     const cookies = parseCookies(req.headers.cookie);
     if (!verifySession(route.name, cookies[cookieName(route.name)], secret)) { socket.destroy(); return; }
     proxyUpgrade(req, socket, head, route.originalService);

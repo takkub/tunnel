@@ -11,7 +11,10 @@ const { execFileSync } = require('child_process');
 function makeTempRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tunnel-status-test-root-'));
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
-  for (const f of ['tunnel-status.js', 'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'tunnel-meta.js']) {
+  for (const f of [
+    'tunnel-status.js', 'runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'tunnel-meta.js',
+    'auth-gate-country.js', 'auth-gate-lockout.js', 'auth-gate-cf-rule.js', 'cloudflare-api.js', 'settings-store.js', 'domains.js',
+  ]) {
     fs.copyFileSync(path.join(__dirname, '..', f), path.join(dir, 'scripts', f));
   }
   return dir;

@@ -7,6 +7,7 @@ const http = require('http');
 
 const { createHandler, createRateLimiter } = require('../auth-gate-server');
 const { hashPassword, signSession, cookieName } = require('../auth-gate-crypto');
+const { readPersistedState } = require('../auth-gate-lockout');
 
 const SECRET = 'test-secret';
 
@@ -23,15 +24,17 @@ function makeTunnel(tunnelsDir, name, password) {
 
 function startServer(opts) {
   const tunnelsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-gate-server-tunnels-'));
+  const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'auth-gate-server-runtime-'));
   const handler = createHandler({
     tunnelsDir,
     secret: SECRET,
     rateLimiter: createRateLimiter(5, 60000),
+    runtimeDir,
     ...opts,
   });
   const server = http.createServer(handler);
   return new Promise(resolve => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, tunnelsDir }));
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, tunnelsDir, runtimeDir }));
   });
 }
 
@@ -224,6 +227,68 @@ test('/verify for a tunnel with no auth-gate.json fails closed (401)', async () 
   try {
     const res = await req(port, { path: '/verify', headers: { 'X-Gate-Tunnel': 'unknown-tunnel' } });
     assert.equal(res.status, 401);
+  } finally { await stop(server); }
+});
+
+test('rate limiting keys on cf-connecting-ip, not the client-supplied x-forwarded-for', async () => {
+  const { server, port, tunnelsDir } = await startServer({ rateLimiter: createRateLimiter(3, 60000) });
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', 'secret123');
+    const body = 'password=wrong';
+    const baseHeaders = { 'X-Gate-Tunnel': 'promptpay', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) };
+
+    // Same real client (same cf-connecting-ip), spoofing a different x-forwarded-for
+    // on every request — must still be rate-limited after 3 attempts.
+    let last;
+    for (let i = 0; i < 4; i++) {
+      last = await req(port, { method: 'POST', path: '/login', headers: { ...baseHeaders, 'CF-Connecting-IP': '9.9.9.9', 'X-Forwarded-For': `1.2.3.${i}` }, body });
+    }
+    assert.equal(last.status, 429);
+  } finally { await stop(server); }
+});
+
+test('a distinct cf-connecting-ip gets its own rate-limit budget', async () => {
+  const { server, port, tunnelsDir } = await startServer({ rateLimiter: createRateLimiter(2, 60000) });
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', 'secret123');
+    const body = 'password=wrong';
+    const baseHeaders = { 'X-Gate-Tunnel': 'promptpay', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) };
+
+    await req(port, { method: 'POST', path: '/login', headers: { ...baseHeaders, 'CF-Connecting-IP': '1.1.1.1' }, body });
+    await req(port, { method: 'POST', path: '/login', headers: { ...baseHeaders, 'CF-Connecting-IP': '1.1.1.1' }, body });
+    const otherIp = await req(port, { method: 'POST', path: '/login', headers: { ...baseHeaders, 'CF-Connecting-IP': '2.2.2.2' }, body });
+    assert.equal(otherIp.status, 200); // not 429 — different IP, fresh budget
+  } finally { await stop(server); }
+});
+
+test('lockout: 20 failed logins across many IPs within 10 minutes locks the tunnel with a 429 + bilingual message', async () => {
+  const { server, port, tunnelsDir, runtimeDir } = await startServer({ rateLimiter: createRateLimiter(1000, 60000) });
+  try {
+    makeTunnel(tunnelsDir, 'promptpay', 'secret123');
+    const body = 'password=wrong';
+    let last;
+    for (let i = 0; i < 20; i++) {
+      last = await req(port, {
+        method: 'POST', path: '/login',
+        headers: { 'X-Gate-Tunnel': 'promptpay', 'CF-Connecting-IP': `10.0.0.${i}`, 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+        body,
+      });
+    }
+    assert.equal(last.status, 429);
+    assert.match(last.body, /ลองใหม่ใน \d+ นาที/);
+
+    // even the correct password is rejected while locked
+    const correct = 'password=secret123';
+    const attempt = await req(port, {
+      method: 'POST', path: '/login',
+      headers: { 'X-Gate-Tunnel': 'promptpay', 'CF-Connecting-IP': '10.0.0.99', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(correct) },
+      body: correct,
+    });
+    assert.equal(attempt.status, 429);
+
+    const persisted = readPersistedState(runtimeDir, 'promptpay');
+    assert.equal(persisted.failedLogins24h, 20);
+    assert.notEqual(persisted.lockedUntil, null);
   } finally { await stop(server); }
 });
 
