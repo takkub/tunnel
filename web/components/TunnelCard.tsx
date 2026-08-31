@@ -37,6 +37,10 @@ const HEALTH_LABEL: Record<HealthState, string> = {
   error: 'ผิดพลาด',
   'origin-down': 'ปลายทางไม่ตอบ',
   stopped: 'หยุด',
+  // Running, but as a process this app never recorded a .pid for (started
+  // outside it — e.g. the generated start.bat/start.sh launcher, or a manual
+  // cloudflared invocation). See TunnelHealth.foreignPid in web/lib/health.ts.
+  foreign: 'รันนอกแอป',
 }
 
 const HEALTH_STYLE: Record<HealthState, string> = {
@@ -46,6 +50,7 @@ const HEALTH_STYLE: Record<HealthState, string> = {
   error: 'bg-red-500/10 text-red-400 border border-red-500/20',
   'origin-down': 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
   stopped: 'bg-zinc-800 text-zinc-500 border border-zinc-700',
+  foreign: 'bg-violet-500/10 text-violet-400 border border-violet-500/20',
 }
 
 function formatAgeSec(sec: number): string {

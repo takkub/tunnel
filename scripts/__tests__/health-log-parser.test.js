@@ -176,6 +176,26 @@ test('parseLogText: reconnect storm of benign errors then 4 registered -> connec
   assert.equal(health, 'connected');
 });
 
+test('parseLogText: "stream canceled by remote" ERR after 4 registered connections stays connected (client dropped the request mid-flight)', () => {
+  const log = [
+    line('2026-08-31T09:00:00Z', 'INF', 'Registered tunnel connection connIndex=0 location=bkk09 protocol=quic'),
+    line('2026-08-31T09:00:01Z', 'INF', 'Registered tunnel connection connIndex=1 location=bkk09 protocol=quic'),
+    line('2026-08-31T09:00:02Z', 'INF', 'Registered tunnel connection connIndex=2 location=sin06 protocol=quic'),
+    line('2026-08-31T09:00:03Z', 'INF', 'Registered tunnel connection connIndex=3 location=sin06 protocol=quic'),
+    line('2026-08-31T09:05:00Z', 'ERR', 'Request failed error="stream 293 canceled by remote with error code 0"'),
+  ].join('\n');
+
+  const parsed = parseLogText(log);
+  assert.equal(parsed.activeConnections, 4);
+  assert.equal(parsed.lastError, null); // benign — client closed the request, not a tunnel-level error
+  assert.equal(parsed.lastErrorAt, null);
+  assert.ok(parsed.lastWarning);
+  assert.match(parsed.lastWarning.message, /canceled by remote/);
+
+  const health = deriveHealth({ running: true, ...parsed });
+  assert.equal(health, 'connected');
+});
+
 test('errorHint: recognizes common cloudflared errors, null for unknown text', () => {
   assert.equal(errorHint('Couldn\'t start tunnel error="Provided Tunnel Credentials are invalid"'), 'credentials ผิด/ถูกลบใน Cloudflare');
   assert.equal(errorHint('context canceled'), 'การเชื่อมต่อถูกยกเลิก (มักเกิดตอนปิด/รีสตาร์ททันเนล)');
