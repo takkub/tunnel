@@ -80,6 +80,10 @@ const modeOptions: ModeOption[] = [
   { value: 'native', label: 'Native', desc: 'ใช้ cloudflared โดยตรง',            Icon: IconTerminalSmall },
 ]
 
+const CARD = 'bg-[#18181b] border border-zinc-800 rounded-2xl p-5 break-inside-avoid mb-4 md:mb-5 xl:mb-6'
+const COLUMNS = 'columns-1 md:columns-2 xl:columns-3 gap-4 md:gap-5 xl:gap-6'
+const GROUP_HEADING = 'text-xs uppercase tracking-wide text-zinc-500 px-1'
+
 export default function SettingsPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -468,7 +472,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-7xl mx-auto space-y-4">
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       {/* Header */}
@@ -483,83 +487,13 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Web Server */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-zinc-200">Web Server</h2>
-          {webStatus && (
-            <span className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 rounded-full ${webStatus.mode === 'online' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              <span className="text-zinc-400">{webStatus.mode === 'online' ? 'Online' : 'Local only'}</span>
-            </span>
-          )}
-        </div>
-
-        {!webStatus ? (
-          <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
-        ) : (
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
-                <p className="text-xs text-zinc-500 mb-1">ที่อยู่ในเครื่อง</p>
-                <div className="flex items-center gap-2">
-                  <a href={webStatus.localUrl} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-mono text-zinc-200 truncate hover:text-orange-400">
-                    {webStatus.localUrl}
-                  </a>
-                  <CopyButton value={webStatus.localUrl} />
-                </div>
-              </div>
-              <div className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
-                <p className="text-xs text-zinc-500 mb-1">ที่อยู่สาธารณะ</p>
-                {webStatus.publicTunnel ? (
-                  <div className="flex items-center gap-2">
-                    <a href={`https://${webStatus.publicTunnel.hostname}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-mono text-zinc-200 truncate hover:text-orange-400">
-                      {webStatus.publicTunnel.hostname}
-                    </a>
-                    <CopyButton value={`https://${webStatus.publicTunnel.hostname}`} />
-                  </div>
-                ) : (
-                  <p className="text-sm text-zinc-500">ยังไม่ได้เปิดให้เข้าจากอินเทอร์เน็ต</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
-              <p className="text-xs text-zinc-500">ทำงานมาแล้ว {formatUptime(webStatus.uptimeSec)}</p>
-              {webStatus.publicTunnel && (
-                <Button
-                  onClick={handleToggleTunnel}
-                  disabled={togglingTunnel}
-                  loading={togglingTunnel}
-                  variant={webStatus.publicTunnel.running ? 'danger-outline' : 'success-outline'}
-                  className="!min-h-0 !py-1.5 !px-3 text-xs"
-                >
-                  {webStatus.publicTunnel.running ? 'หยุดการเชื่อมต่อสาธารณะ' : 'เริ่มการเชื่อมต่อสาธารณะ'}
-                </Button>
-              )}
-            </div>
-
-            {!webStatus.publicTunnel && (
-              <ExposeOnlineForm
-                webPort={webStatus.port}
-                zoneName={settings?.cloudflare.zoneName ?? null}
-                adminPasswordSet={Boolean(settings?.admin?.passwordSet)}
-                onExposed={fetchWebStatus}
-              />
-            )}
-
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              เว็บนี้ทำงานคู่กับแอป — ปิดหน้าต่างแล้วแอปจะซ่อนอยู่ใน tray ต่อไป (ไม่หยุดทำงาน)
-              {webStatus.desktopMode && ' ถ้าต้องการหยุดจริง ๆ ให้กด Quit จากเมนู tray'}
-            </p>
-          </div>
-        )}
-      </section>
-
-      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start">
+      {/* Group: Cloudflare */}
+      <div className="space-y-3">
+      <p className={GROUP_HEADING}>Cloudflare</p>
+      <div className={COLUMNS}>
       {/* Cloudflare */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold text-zinc-200">Cloudflare</h2>
+      <section className={CARD}>
+        <h2 className="font-semibold text-zinc-200 mb-4">Cloudflare</h2>
         {settingsLoading ? (
           <div className="space-y-2 animate-pulse">
             {[1, 2].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
@@ -626,9 +560,119 @@ export default function SettingsPage() {
         )}
       </section>
 
+      {/* Domains */}
+      <section className={CARD}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-zinc-200">Domains</h2>
+          <RefreshButton onClick={fetchDomains} disabled={domainsLoading} loading={domainsLoading} />
+        </div>
+
+        {domainsLoading ? (
+          <div className="space-y-2 animate-pulse">
+            {[1, 2].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
+          </div>
+        ) : domains.length === 0 ? (
+          <p className="text-sm text-zinc-500">ยังไม่มี domain</p>
+        ) : (
+          <ul className="space-y-2">
+            {domains.map(d => (
+              <li key={d.domain} className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-100 font-mono truncate">{d.domain}</p>
+                  <p className="text-xs text-zinc-500 font-mono truncate">{d.zoneId}</p>
+                </div>
+                <button
+                  onClick={() => handleDeleteDomain(d.domain)}
+                  disabled={deletingDomain === d.domain}
+                  className="flex-shrink-0 w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center text-sm transition-colors disabled:opacity-40"
+                  aria-label={`ลบ ${d.domain}`}
+                >
+                  {deletingDomain === d.domain ? <span className="w-3 h-3 border border-zinc-500 border-t-zinc-300 rounded-full animate-spin" /> : '✕'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form onSubmit={handleAddDomain} className="space-y-2 pt-3">
+          <input
+            type="text"
+            required
+            placeholder="example.com"
+            value={domainInput}
+            onChange={e => setDomainInput(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Zone ID (จาก Cloudflare)"
+            value={domainZoneInput}
+            onChange={e => setDomainZoneInput(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={addingDomain || !domainInput || !domainZoneInput}
+            className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
+          >
+            {addingDomain && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            เพิ่ม Domain
+          </button>
+          <p className="text-xs text-zinc-500 pt-0.5">API token ต้องมีสิทธิ์ Zone › DNS › Edit ครอบ zone นี้ด้วย</p>
+        </form>
+      </section>
+
+      {/* cloudflared */}
+      <section className={CARD}>
+        <h2 className="font-semibold text-zinc-200 mb-4">cloudflared</h2>
+        {settingsLoading ? (
+          <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
+        ) : settings === null ? (
+          <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.cloudflared.installed ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                  <span className="text-sm text-zinc-200 font-medium">
+                    {settings.cloudflared.installed ? `ติดตั้งแล้ว (${settings.cloudflared.version ?? '?'})` : 'ยังไม่ได้ติดตั้ง'}
+                  </span>
+                </div>
+                {settings.cloudflared.path && (
+                  <p className="text-xs text-zinc-500 font-mono truncate mt-0.5">{settings.cloudflared.path}</p>
+                )}
+              </div>
+              <Button onClick={handleInstallCloudflared} disabled={installing} loading={installing} variant="secondary" className="text-xs px-3 py-2 min-h-0 flex-shrink-0">
+                {settings.cloudflared.installed ? 'ติดตั้งใหม่' : 'ติดตั้ง'}
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.cloudflared.loggedIn ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                <span className="text-sm text-zinc-200 font-medium">
+                  {settings.cloudflared.loggedIn ? 'เข้าสู่ระบบ Cloudflare แล้ว' : 'ยังไม่ได้เข้าสู่ระบบ'}
+                </span>
+              </div>
+              <Button
+                onClick={handleLoginCloudflared}
+                disabled={loggingIn || !settings.cloudflared.installed}
+                loading={loggingIn}
+                variant="secondary"
+                className="text-xs px-3 py-2 min-h-0 flex-shrink-0"
+              >
+                {settings.cloudflared.loggedIn ? 'เข้าสู่ระบบใหม่' : 'เข้าสู่ระบบ'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Cloudflare R2 */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold text-zinc-200">Cloudflare R2</h2>
+      <section className={CARD}>
+        <h2 className="font-semibold text-zinc-200 mb-4">Cloudflare R2</h2>
         {settingsLoading ? (
           <div className="space-y-2 animate-pulse">
             {[1, 2, 3].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
@@ -707,17 +751,98 @@ export default function SettingsPage() {
           </form>
         )}
         {settings && (
-          <R2UsageCard
-            analyticsTokenSet={settings.r2.analyticsTokenSet}
-            analyticsTokenMasked={settings.r2.analyticsTokenMasked}
-            onSaveAnalyticsToken={handleSaveAnalyticsToken}
-          />
+          <div className="mt-4">
+            <R2UsageCard
+              analyticsTokenSet={settings.r2.analyticsTokenSet}
+              analyticsTokenMasked={settings.r2.analyticsTokenMasked}
+              onSaveAnalyticsToken={handleSaveAnalyticsToken}
+            />
+          </div>
+        )}
+      </section>
+      </div>
+      </div>
+
+      {/* Group: เซิร์ฟเวอร์ & ระบบ */}
+      <div className="space-y-3">
+      <p className={GROUP_HEADING}>เซิร์ฟเวอร์ & ระบบ</p>
+      <div className={COLUMNS}>
+      {/* Web Server */}
+      <section className={CARD}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-zinc-200">Web Server</h2>
+          {webStatus && (
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className={`w-2 h-2 rounded-full ${webStatus.mode === 'online' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="text-zinc-400">{webStatus.mode === 'online' ? 'Online' : 'Local only'}</span>
+            </span>
+          )}
+        </div>
+
+        {!webStatus ? (
+          <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
+        ) : (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
+                <p className="text-xs text-zinc-500 mb-1">ที่อยู่ในเครื่อง</p>
+                <div className="flex items-center gap-2">
+                  <a href={webStatus.localUrl} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-mono text-zinc-200 truncate hover:text-orange-400">
+                    {webStatus.localUrl}
+                  </a>
+                  <CopyButton value={webStatus.localUrl} />
+                </div>
+              </div>
+              <div className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
+                <p className="text-xs text-zinc-500 mb-1">ที่อยู่สาธารณะ</p>
+                {webStatus.publicTunnel ? (
+                  <div className="flex items-center gap-2">
+                    <a href={`https://${webStatus.publicTunnel.hostname}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm font-mono text-zinc-200 truncate hover:text-orange-400">
+                      {webStatus.publicTunnel.hostname}
+                    </a>
+                    <CopyButton value={`https://${webStatus.publicTunnel.hostname}`} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500">ยังไม่ได้เปิดให้เข้าจากอินเทอร์เน็ต</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700">
+              <p className="text-xs text-zinc-500">ทำงานมาแล้ว {formatUptime(webStatus.uptimeSec)}</p>
+              {webStatus.publicTunnel && (
+                <Button
+                  onClick={handleToggleTunnel}
+                  disabled={togglingTunnel}
+                  loading={togglingTunnel}
+                  variant={webStatus.publicTunnel.running ? 'danger-outline' : 'success-outline'}
+                  className="!min-h-0 !py-1.5 !px-3 text-xs"
+                >
+                  {webStatus.publicTunnel.running ? 'หยุดการเชื่อมต่อสาธารณะ' : 'เริ่มการเชื่อมต่อสาธารณะ'}
+                </Button>
+              )}
+            </div>
+
+            {!webStatus.publicTunnel && (
+              <ExposeOnlineForm
+                webPort={webStatus.port}
+                zoneName={settings?.cloudflare.zoneName ?? null}
+                adminPasswordSet={Boolean(settings?.admin?.passwordSet)}
+                onExposed={fetchWebStatus}
+              />
+            )}
+
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              เว็บนี้ทำงานคู่กับแอป — ปิดหน้าต่างแล้วแอปจะซ่อนอยู่ใน tray ต่อไป (ไม่หยุดทำงาน)
+              {webStatus.desktopMode && ' ถ้าต้องการหยุดจริง ๆ ให้กด Quit จากเมนู tray'}
+            </p>
+          </div>
         )}
       </section>
 
       {/* Admin */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold text-zinc-200">แอดมิน</h2>
+      <section className={CARD}>
+        <h2 className="font-semibold text-zinc-200 mb-4">แอดมิน</h2>
         {settingsLoading ? (
           <div className="h-12 bg-zinc-800 rounded-xl animate-pulse" />
         ) : settings === null ? (
@@ -775,8 +900,8 @@ export default function SettingsPage() {
       </section>
 
       {/* Runtime Mode */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
+      <section className={CARD}>
+        <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-zinc-200">Runtime Mode</h2>
           {settings && (
             <span className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">
@@ -792,7 +917,7 @@ export default function SettingsPage() {
         ) : settings === null ? (
           <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
         ) : (
-          <>
+          <div className="space-y-4">
             <div className="space-y-2">
               {modeOptions.map(opt => (
                 <label
@@ -854,171 +979,13 @@ export default function SettingsPage() {
                 </span>
               )}
             </div>
-          </>
-        )}
-      </section>
-
-      {/* Desktop */}
-      {settings?.runtime.desktopMode && (
-        <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-          <h2 className="font-semibold text-zinc-200">Desktop</h2>
-
-          <label className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 cursor-pointer">
-            <div className="min-w-0">
-              <p className="text-sm text-zinc-200 font-medium">เปิดแอปอัตโนมัติเมื่อเข้าเครื่อง</p>
-              <p className="text-xs text-zinc-500 mt-0.5">แอปจะเปิดเองแบบซ่อนใน tray ตอนเปิดเครื่อง</p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.desktop.launchAtLogin}
-              onClick={() => handleToggleDesktop('launchAtLogin')}
-              disabled={savingDesktop !== null}
-              className={`flex-shrink-0 relative w-11 h-6 rounded-full transition-colors duration-150 disabled:opacity-40 ${
-                settings.desktop.launchAtLogin ? 'bg-orange-500' : 'bg-zinc-700'
-              }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-150 ${
-                settings.desktop.launchAtLogin ? 'translate-x-5' : ''
-              }`} />
-            </button>
-          </label>
-
-          <label className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 cursor-pointer">
-            <div className="min-w-0">
-              <p className="text-sm text-zinc-200 font-medium">เริ่ม tunnels ที่ตั้ง autostart ไว้เมื่อเปิดแอป</p>
-              <p className="text-xs text-zinc-500 mt-0.5">ใช้ร่วมกับปุ่ม ⚡ Autostart บนการ์ดแต่ละ tunnel</p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.desktop.autostartTunnelsOnLaunch}
-              onClick={() => handleToggleDesktop('autostartTunnelsOnLaunch')}
-              disabled={savingDesktop !== null}
-              className={`flex-shrink-0 relative w-11 h-6 rounded-full transition-colors duration-150 disabled:opacity-40 ${
-                settings.desktop.autostartTunnelsOnLaunch ? 'bg-orange-500' : 'bg-zinc-700'
-              }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-150 ${
-                settings.desktop.autostartTunnelsOnLaunch ? 'translate-x-5' : ''
-              }`} />
-            </button>
-          </label>
-        </section>
-      )}
-
-      {/* cloudflared */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <h2 className="font-semibold text-zinc-200">cloudflared</h2>
-        {settingsLoading ? (
-          <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
-        ) : settings === null ? (
-          <p className="text-sm text-zinc-500">API ยังไม่พร้อม</p>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.cloudflared.installed ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
-                  <span className="text-sm text-zinc-200 font-medium">
-                    {settings.cloudflared.installed ? `ติดตั้งแล้ว (${settings.cloudflared.version ?? '?'})` : 'ยังไม่ได้ติดตั้ง'}
-                  </span>
-                </div>
-                {settings.cloudflared.path && (
-                  <p className="text-xs text-zinc-500 font-mono truncate mt-0.5">{settings.cloudflared.path}</p>
-                )}
-              </div>
-              <Button onClick={handleInstallCloudflared} disabled={installing} loading={installing} variant="secondary" className="text-xs px-3 py-2 min-h-0 flex-shrink-0">
-                {settings.cloudflared.installed ? 'ติดตั้งใหม่' : 'ติดตั้ง'}
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${settings.cloudflared.loggedIn ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
-                <span className="text-sm text-zinc-200 font-medium">
-                  {settings.cloudflared.loggedIn ? 'เข้าสู่ระบบ Cloudflare แล้ว' : 'ยังไม่ได้เข้าสู่ระบบ'}
-                </span>
-              </div>
-              <Button
-                onClick={handleLoginCloudflared}
-                disabled={loggingIn || !settings.cloudflared.installed}
-                loading={loggingIn}
-                variant="secondary"
-                className="text-xs px-3 py-2 min-h-0 flex-shrink-0"
-              >
-                {settings.cloudflared.loggedIn ? 'เข้าสู่ระบบใหม่' : 'เข้าสู่ระบบ'}
-              </Button>
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* Domains */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-zinc-200">Domains</h2>
-          <RefreshButton onClick={fetchDomains} disabled={domainsLoading} loading={domainsLoading} />
-        </div>
-
-        {domainsLoading ? (
-          <div className="space-y-2 animate-pulse">
-            {[1, 2].map(i => <div key={i} className="h-12 bg-zinc-800 rounded-xl" />)}
           </div>
-        ) : domains.length === 0 ? (
-          <p className="text-sm text-zinc-500">ยังไม่มี domain</p>
-        ) : (
-          <ul className="space-y-2">
-            {domains.map(d => (
-              <li key={d.domain} className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700">
-                <div className="min-w-0">
-                  <p className="text-sm text-zinc-100 font-mono truncate">{d.domain}</p>
-                  <p className="text-xs text-zinc-500 font-mono truncate">{d.zoneId}</p>
-                </div>
-                <button
-                  onClick={() => handleDeleteDomain(d.domain)}
-                  disabled={deletingDomain === d.domain}
-                  className="flex-shrink-0 w-8 h-8 rounded-lg bg-zinc-800 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center text-sm transition-colors disabled:opacity-40"
-                  aria-label={`ลบ ${d.domain}`}
-                >
-                  {deletingDomain === d.domain ? <span className="w-3 h-3 border border-zinc-500 border-t-zinc-300 rounded-full animate-spin" /> : '✕'}
-                </button>
-              </li>
-            ))}
-          </ul>
         )}
-
-        <form onSubmit={handleAddDomain} className="space-y-2 pt-1">
-          <input
-            type="text"
-            required
-            placeholder="example.com"
-            value={domainInput}
-            onChange={e => setDomainInput(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
-          />
-          <input
-            type="text"
-            required
-            placeholder="Zone ID (จาก Cloudflare)"
-            value={domainZoneInput}
-            onChange={e => setDomainZoneInput(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-orange-500/60 transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={addingDomain || !domainInput || !domainZoneInput}
-            className="min-h-[48px] w-full rounded-xl bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white text-sm font-semibold disabled:!bg-zinc-800 disabled:!text-zinc-600 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
-          >
-            {addingDomain && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-            เพิ่ม Domain
-          </button>
-        </form>
       </section>
 
       {/* Requirements */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
+      <section className={CARD}>
+        <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-zinc-200">Requirements</h2>
           <RefreshButton onClick={fetchReqs} disabled={reqsLoading} loading={reqsLoading} />
         </div>
@@ -1057,10 +1024,67 @@ export default function SettingsPage() {
           </ul>
         )}
       </section>
+      </div>
+      </div>
+
+      {/* Group: แอปพลิเคชัน */}
+      <div className="space-y-3">
+      <p className={GROUP_HEADING}>แอปพลิเคชัน</p>
+      <div className={COLUMNS}>
+      {/* Desktop */}
+      {settings?.runtime.desktopMode && (
+        <section className={CARD}>
+          <h2 className="font-semibold text-zinc-200 mb-4">Desktop</h2>
+
+          <div className="space-y-3">
+            <label className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 cursor-pointer">
+              <div className="min-w-0">
+                <p className="text-sm text-zinc-200 font-medium">เปิดแอปอัตโนมัติเมื่อเข้าเครื่อง</p>
+                <p className="text-xs text-zinc-500 mt-0.5">แอปจะเปิดเองแบบซ่อนใน tray ตอนเปิดเครื่อง</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.desktop.launchAtLogin}
+                onClick={() => handleToggleDesktop('launchAtLogin')}
+                disabled={savingDesktop !== null}
+                className={`flex-shrink-0 relative w-11 h-6 rounded-full transition-colors duration-150 disabled:opacity-40 ${
+                  settings.desktop.launchAtLogin ? 'bg-orange-500' : 'bg-zinc-700'
+                }`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-150 ${
+                  settings.desktop.launchAtLogin ? 'translate-x-5' : ''
+                }`} />
+              </button>
+            </label>
+
+            <label className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 cursor-pointer">
+              <div className="min-w-0">
+                <p className="text-sm text-zinc-200 font-medium">เริ่ม tunnels ที่ตั้ง autostart ไว้เมื่อเปิดแอป</p>
+                <p className="text-xs text-zinc-500 mt-0.5">ใช้ร่วมกับปุ่ม ⚡ Autostart บนการ์ดแต่ละ tunnel</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.desktop.autostartTunnelsOnLaunch}
+                onClick={() => handleToggleDesktop('autostartTunnelsOnLaunch')}
+                disabled={savingDesktop !== null}
+                className={`flex-shrink-0 relative w-11 h-6 rounded-full transition-colors duration-150 disabled:opacity-40 ${
+                  settings.desktop.autostartTunnelsOnLaunch ? 'bg-orange-500' : 'bg-zinc-700'
+                }`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-150 ${
+                  settings.desktop.autostartTunnelsOnLaunch ? 'translate-x-5' : ''
+                }`} />
+              </button>
+            </label>
+          </div>
+        </section>
+      )}
 
       {/* App info */}
-      <section className="bg-[#18181b] border border-zinc-800 rounded-2xl p-5 space-y-3">
-        <div className="flex items-center justify-between">
+      <section className={CARD}>
+        <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-zinc-200">App</h2>
           <span className="text-xs text-zinc-500 font-mono">v{settings?.appVersion ?? '?'}</span>
         </div>
@@ -1108,6 +1132,7 @@ export default function SettingsPage() {
           </p>
         )}
       </section>
+      </div>
       </div>
     </div>
   )
