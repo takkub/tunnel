@@ -1,6 +1,6 @@
 {
   "name": "tunnel-takkub",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Cloudflare Tunnel Management Scripts",
   "main": "dist/index.js",
   "bin": {

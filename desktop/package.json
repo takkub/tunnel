@@ -1,6 +1,6 @@
 {
   "name": "tunnel-desktop",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Cloudflare Tunnel Manager — desktop app",
   "private": true,
   "main": "dist/main.js",
