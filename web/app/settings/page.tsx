@@ -6,6 +6,7 @@ import RefreshButton from '@/components/RefreshButton'
 import CopyButton from '@/components/CopyButton'
 import ExposeOnlineForm from '@/components/ExposeOnlineForm'
 import R2UsageCard from '@/components/R2UsageCard'
+import Masonry from '@/components/Masonry'
 
 type RuntimeMode = 'auto' | 'docker' | 'native'
 interface DomainEntry { domain: string; zoneId: string }
@@ -80,9 +81,8 @@ const modeOptions: ModeOption[] = [
   { value: 'native', label: 'Native', desc: 'ใช้ cloudflared โดยตรง',            Icon: IconTerminalSmall },
 ]
 
-const CARD = 'bg-[#18181b] border border-zinc-800 rounded-2xl p-5 break-inside-avoid mb-4 md:mb-5 xl:mb-6'
-const COLUMNS = 'columns-1 md:columns-2 xl:columns-3 gap-4 md:gap-5 xl:gap-6'
-const GROUP_HEADING = 'text-xs uppercase tracking-wide text-zinc-500 px-1'
+const CARD = 'bg-[#18181b] border border-zinc-800 rounded-2xl p-5'
+const GROUP_LABEL = 'block text-[10px] uppercase tracking-wider text-zinc-500 mb-2'
 
 export default function SettingsPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
@@ -472,7 +472,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       {/* Header */}
@@ -487,12 +487,10 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Group: Cloudflare */}
-      <div className="space-y-3">
-      <p className={GROUP_HEADING}>Cloudflare</p>
-      <div className={COLUMNS}>
+      <Masonry gap={20}>
       {/* Cloudflare */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>Cloudflare</span>
         <h2 className="font-semibold text-zinc-200 mb-4">Cloudflare</h2>
         {settingsLoading ? (
           <div className="space-y-2 animate-pulse">
@@ -562,6 +560,7 @@ export default function SettingsPage() {
 
       {/* Domains */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>Cloudflare</span>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-zinc-200">Domains</h2>
           <RefreshButton onClick={fetchDomains} disabled={domainsLoading} loading={domainsLoading} />
@@ -625,6 +624,7 @@ export default function SettingsPage() {
 
       {/* cloudflared */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>Cloudflare</span>
         <h2 className="font-semibold text-zinc-200 mb-4">cloudflared</h2>
         {settingsLoading ? (
           <div className="h-16 bg-zinc-800 rounded-xl animate-pulse" />
@@ -672,6 +672,7 @@ export default function SettingsPage() {
 
       {/* Cloudflare R2 */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>Cloudflare</span>
         <h2 className="font-semibold text-zinc-200 mb-4">Cloudflare R2</h2>
         {settingsLoading ? (
           <div className="space-y-2 animate-pulse">
@@ -760,15 +761,9 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
-      </div>
-      </div>
-
-      {/* Group: เซิร์ฟเวอร์ & ระบบ */}
-      <div className="space-y-3">
-      <p className={GROUP_HEADING}>เซิร์ฟเวอร์ & ระบบ</p>
-      <div className={COLUMNS}>
       {/* Web Server */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>เซิร์ฟเวอร์ & ระบบ</span>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-zinc-200">Web Server</h2>
           {webStatus && (
@@ -842,6 +837,7 @@ export default function SettingsPage() {
 
       {/* Admin */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>เซิร์ฟเวอร์ & ระบบ</span>
         <h2 className="font-semibold text-zinc-200 mb-4">แอดมิน</h2>
         {settingsLoading ? (
           <div className="h-12 bg-zinc-800 rounded-xl animate-pulse" />
@@ -901,6 +897,7 @@ export default function SettingsPage() {
 
       {/* Runtime Mode */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>เซิร์ฟเวอร์ & ระบบ</span>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-zinc-200">Runtime Mode</h2>
           {settings && (
@@ -985,6 +982,7 @@ export default function SettingsPage() {
 
       {/* Requirements */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>เซิร์ฟเวอร์ & ระบบ</span>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-zinc-200">Requirements</h2>
           <RefreshButton onClick={fetchReqs} disabled={reqsLoading} loading={reqsLoading} />
@@ -1024,16 +1022,10 @@ export default function SettingsPage() {
           </ul>
         )}
       </section>
-      </div>
-      </div>
-
-      {/* Group: แอปพลิเคชัน */}
-      <div className="space-y-3">
-      <p className={GROUP_HEADING}>แอปพลิเคชัน</p>
-      <div className={COLUMNS}>
       {/* Desktop */}
       {settings?.runtime.desktopMode && (
         <section className={CARD}>
+          <span className={GROUP_LABEL}>แอปพลิเคชัน</span>
           <h2 className="font-semibold text-zinc-200 mb-4">Desktop</h2>
 
           <div className="space-y-3">
@@ -1084,6 +1076,7 @@ export default function SettingsPage() {
 
       {/* App info */}
       <section className={CARD}>
+        <span className={GROUP_LABEL}>แอปพลิเคชัน</span>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-zinc-200">App</h2>
           <span className="text-xs text-zinc-500 font-mono">v{settings?.appVersion ?? '?'}</span>
@@ -1132,8 +1125,7 @@ export default function SettingsPage() {
           </p>
         )}
       </section>
-      </div>
-      </div>
+      </Masonry>
     </div>
   )
 }
