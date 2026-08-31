@@ -10,6 +10,7 @@ const {
   getCloudflaredProcesses,
 } = require('./runtime');
 const { getAutostart } = require('./tunnel-meta');
+const authGate = require('./auth-gate');
 
 function listCandidateNames(mode) {
   // Union of native + docker tunnel folders so a flagged tunnel is picked up
@@ -18,9 +19,31 @@ function listCandidateNames(mode) {
   return [...names].sort();
 }
 
+// The auth-gate proxy/container is a single shared process fronting every
+// gate-enabled tunnel, independent of each tunnel's own autostart flag — a
+// tunnel that never stopped across an app restart (native tunnels are
+// WMI-detached and outlive the app) still needs its gate back, so this checks
+// every candidate name's auth-gate.json, not just the ones this run started.
+function ensureGateForEnabledTunnels(mode, allNames) {
+  const tunnels = allNames.filter(name => {
+    try { return authGate.readState(name).enabled; } catch { return false; }
+  });
+  if (!tunnels.length) return { needed: false, started: false, tunnels: [] };
+
+  const wasRunning = mode === 'native' ? authGate.nativeGateRunning() : authGate.isGateRunning();
+  try {
+    if (mode === 'native') authGate.ensureNativeGateRunning();
+    else authGate.ensureGateRunning();
+    return { needed: true, started: !wasRunning, tunnels };
+  } catch (err) {
+    return { needed: true, started: false, error: err.message, tunnels };
+  }
+}
+
 function run() {
   const mode = getEffectiveMode();
-  const names = listCandidateNames(mode).filter(getAutostart);
+  const allNames = listCandidateNames(mode);
+  const names = allNames.filter(getAutostart);
 
   const nativeProcesses = getCloudflaredProcesses();
   const started = [];
@@ -43,7 +66,9 @@ function run() {
     }
   }
 
-  return { mode, started, skipped, failed };
+  const gate = ensureGateForEnabledTunnels(mode, allNames);
+
+  return { mode, started, skipped, failed, gate };
 }
 
 function main() {
@@ -65,6 +90,12 @@ function main() {
     console.log(`Skipped (already running): ${summary.skipped.length ? summary.skipped.join(', ') : '(none)'}`);
     if (summary.failed.length) {
       console.log(`Failed: ${summary.failed.map(f => `${f.name} (${f.error})`).join(', ')}`);
+    }
+    if (summary.gate.needed) {
+      const gateNote = summary.gate.error
+        ? `error (${summary.gate.error})`
+        : summary.gate.started ? 'started' : 'already running';
+      console.log(`Auth gate: ${gateNote} — for ${summary.gate.tunnels.join(', ')}`);
     }
   }
   process.exit(0);

@@ -13,7 +13,8 @@ function makeTempRoot() {
   fs.mkdirSync(path.join(dir, 'tunnels'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'nginx', 'auth-gate'), { recursive: true });
-  for (const f of ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js']) {
+  const files = ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'auth-gate-proxy.js', 'auth-gate-server.js'];
+  for (const f of files) {
     fs.copyFileSync(path.join(__dirname, '..', f), path.join(dir, 'scripts', f));
   }
   return dir;
@@ -21,7 +22,8 @@ function makeTempRoot() {
 
 function loadAuthGate(root) {
   const modPath = path.join(root, 'scripts', 'auth-gate.js');
-  for (const f of ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js']) {
+  const files = ['runtime.js', 'cloudflared-bin.js', 'auth-gate.js', 'auth-gate-crypto.js', 'auth-gate-proxy.js', 'auth-gate-server.js'];
+  for (const f of files) {
     delete require.cache[require.resolve(path.join(root, 'scripts', f))];
   }
   return require(modPath);
@@ -311,4 +313,65 @@ test('enable() honors TUNNEL_DATA_DIR for tunnels/ resolution', () => {
     if (prevDataDir === undefined) delete process.env.TUNNEL_DATA_DIR;
     else process.env.TUNNEL_DATA_DIR = prevDataDir;
   }
+});
+
+// Regression test for the v1.1.11 update incident this task fixes: the native
+// gate proxy used to be launched with a plain child_process.spawn(detached:true),
+// which is still a descendant of this process in the Windows process tree — so
+// desktop/src/server.ts's stopServer() (`taskkill /pid <web server pid> /T /F`,
+// run on every app quit/restart) killed it right along with the web server, even
+// though native tunnels themselves (launched via runtime.js's WMI-routed
+// spawnDetached) correctly survived. ensureNativeGateRunning() must route
+// through the same spawnDetached so the gate proxy is equally taskkill-proof,
+// and stopNativeGateIfIdle() must fully reap it (via killDetached) rather than
+// leaving an orphaned process if the recorded pid is only an intermediate shell.
+test('ensureNativeGateRunning() launches a process that survives a taskkill-style tree-kill of the process that launched it, and stopNativeGateIfIdle() fully reaps it', async (t) => {
+  const root = makeTempRoot();
+  const gatePort = 20000 + Math.floor(Math.random() * 10000);
+  const { nativeGateRunning, stopNativeGateIfIdle } = loadAuthGate(root);
+  t.after(() => stopNativeGateIfIdle());
+
+  // Calls ensureNativeGateRunning() from inside a throwaway child process — a
+  // stand-in for the desktop app's web server, which is what actually calls it
+  // in production — then keeps that stand-in alive so it can be tree-killed
+  // exactly like desktop/src/server.ts's stopServer() does (`taskkill /pid
+  // <web server pid> /T /F` on every app quit/restart). Before this fix, a
+  // plain child_process.spawn(detached:true) here would still be reaped by
+  // that tree-kill; ensureNativeGateRunning's spawnDetached (WMI-routed on
+  // Windows) must not be.
+  const authGatePath = path.join(root, 'scripts', 'auth-gate.js');
+  const parentScript = `require(${JSON.stringify(authGatePath)}).ensureNativeGateRunning(); setInterval(() => {}, 1e9);`;
+  const { spawn, spawnSync } = require('child_process');
+  const parent = spawn(process.execPath, ['-e', parentScript], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, AUTH_GATE_PORT: String(gatePort) },
+  });
+  parent.unref();
+
+  const parentAlive = await waitFor(() => { try { process.kill(parent.pid, 0); return true; } catch { return false; } });
+  assert.ok(parentAlive, 'stand-in parent process should have started');
+
+  const pidFile = path.join(root, 'runtime', 'auth-gate', '.pid');
+  const gateStarted = await waitFor(() => fs.existsSync(pidFile), { timeoutMs: 10000 });
+  assert.ok(gateStarted, 'ensureNativeGateRunning() (run inside the stand-in parent) should have written the gate pid file');
+  const gatePid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+  assert.ok(Number.isFinite(gatePid));
+  assert.equal(nativeGateRunning(), true);
+
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/PID', String(parent.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+  } else {
+    try { process.kill(-parent.pid, 'SIGKILL'); } catch { try { process.kill(parent.pid, 'SIGKILL'); } catch {} }
+  }
+
+  // Give the tree-kill a moment, then confirm the gate is still alive — this
+  // is the actual regression check.
+  await new Promise(r => setTimeout(r, 1000));
+  assert.equal(nativeGateRunning(), true, 'gate proxy must survive a tree-kill of the process that launched it');
+
+  stopNativeGateIfIdle();
+  const reaped = await waitFor(() => { try { process.kill(gatePid, 0); return false; } catch { return true; } }, { timeoutMs: 5000 });
+  assert.ok(reaped, 'stopNativeGateIfIdle() should fully reap the gate process, not just drop the pid file');
+  assert.equal(fs.existsSync(pidFile), false);
 });

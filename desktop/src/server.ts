@@ -6,6 +6,8 @@ import path from 'path'
 import getPort from 'get-port'
 import { buildSpawnEnv } from './dotenv-env'
 import { resolveConfiguredPort, acquirePort } from './port-resolver'
+import { startServerWithRetry } from './server-startup'
+import { appendLog, getLogPath } from './log'
 
 // Where scripts/ lives — read-only in a packaged app, the repo root in dev.
 export const TUNNEL_ROOT = app.isPackaged
@@ -74,6 +76,75 @@ function loadOrCreateSessionSecret(): string {
 
 let serverProcess: ChildProcess | null = null
 
+function log(line: string): void {
+  console.log(line)
+  appendLog(TUNNEL_DATA_DIR, line)
+}
+
+function spawnServerProcess(port: number, env: NodeJS.ProcessEnv): ChildProcess {
+  let proc: ChildProcess
+  // stdin is ignored, not piped — nothing ever writes to it, and an
+  // unconsumed piped stdin is one of the few ways a spawned Node child can
+  // end up blocked before it even reaches its own listen() call. windowsHide
+  // avoids a console flash on Windows. Neither was confirmed as the cause of
+  // the v1.1.11 "child alive, near-zero CPU, never listening" hang — it could
+  // not be reproduced directly — but both rule out a plausible contributor.
+  if (app.isPackaged) {
+    const serverJs = path.join(TUNNEL_ROOT, 'web', 'server.js')
+    proc = spawn(process.execPath, [serverJs], {
+      cwd: path.dirname(serverJs),
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+  } else {
+    // Dev: run the real `next dev` for HMR against the checked-out web/ app.
+    const webDir = path.join(TUNNEL_ROOT, 'web')
+    const nextBin = path.join(webDir, 'node_modules', 'next', 'dist', 'bin', 'next')
+    proc = spawn(process.execPath, [nextBin, 'dev', '-p', String(port)], {
+      cwd: webDir,
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+  }
+
+  proc.stdout?.on('data', d => log(`[server] ${d.toString().trim()}`))
+  proc.stderr?.on('data', d => log(`[server:err] ${d.toString().trim()}`))
+  proc.on('exit', code => log(`[server] exited with code ${code}`))
+  return proc
+}
+
+// Used by the startup retry (killing a stuck first attempt before spawning a
+// second) — unlike stopServer() below, this waits for the kill to actually
+// land before resolving, since the retry then reuses the same fixed port.
+function killProcess(proc: ChildProcess): Promise<void> {
+  return new Promise(resolve => {
+    if (proc.exitCode !== null || proc.signalCode !== null) {
+      resolve()
+      return
+    }
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+    proc.once('exit', done)
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'])
+      // taskkill returning doesn't guarantee our own 'exit' listener above has
+      // fired yet (and a stuck killer must never hang the retry forever), so
+      // give it one brief grace window either way.
+      killer.on('exit', () => setTimeout(done, 500))
+      killer.on('error', () => setTimeout(done, 500))
+    } else {
+      proc.kill('SIGTERM')
+      setTimeout(done, 2000)
+    }
+  })
+}
+
 export async function startServer(): Promise<{ port: number; url: string }> {
   const port = await resolvePort()
   const sessionSecret = loadOrCreateSessionSecret()
@@ -93,31 +164,24 @@ export async function startServer(): Promise<{ port: number; url: string }> {
     APP_VERSION: app.getVersion(),
   })
 
-  if (app.isPackaged) {
-    const serverJs = path.join(TUNNEL_ROOT, 'web', 'server.js')
-    serverProcess = spawn(process.execPath, [serverJs], {
-      cwd: path.dirname(serverJs),
-      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: 'pipe',
-    })
-  } else {
-    // Dev: run the real `next dev` for HMR against the checked-out web/ app.
-    const webDir = path.join(TUNNEL_ROOT, 'web')
-    const nextBin = path.join(webDir, 'node_modules', 'next', 'dist', 'bin', 'next')
-    serverProcess = spawn(process.execPath, [nextBin, 'dev', '-p', String(port)], {
-      cwd: webDir,
-      env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: 'pipe',
-    })
-  }
-
-  serverProcess.stdout?.on('data', d => console.log('[server]', d.toString().trim()))
-  serverProcess.stderr?.on('data', d => console.error('[server]', d.toString().trim()))
-  serverProcess.on('exit', code => console.log('[server] exited with code', code))
-
   const url = `http://127.0.0.1:${port}`
-  await waitForServer(url)
-  return { port, url }
+
+  try {
+    return await startServerWithRetry({
+      spawnAndWait: async () => {
+        serverProcess = spawnServerProcess(port, env)
+        await waitForServer(url)
+        return { port, url }
+      },
+      killPrevious: async () => {
+        if (serverProcess) await killProcess(serverProcess)
+        serverProcess = null
+      },
+      log,
+    })
+  } catch (err) {
+    throw new Error(`${(err as Error).message}\nDetails: ${getLogPath(TUNNEL_DATA_DIR)}`)
+  }
 }
 
 async function waitForServer(url: string, timeoutMs = 30_000): Promise<void> {

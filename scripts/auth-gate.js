@@ -3,7 +3,7 @@
 // nginx does auth_request against auth-gate-server.js (cookie-based session),
 // redirecting unauthenticated visitors to a login page served by that same service.
 'use strict';
-const { execSync, spawn } = require('child_process');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -20,6 +20,8 @@ const {
   nativeStop,
   nativeStart,
   getCloudflaredProcesses,
+  spawnDetached,
+  killDetached,
 } = require('./runtime');
 const { hashPassword, ensureSecretFile } = require('./auth-gate-crypto');
 
@@ -336,19 +338,21 @@ function nativeGateRunning() {
   try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
+// Launched via runtime.js's spawnDetached (WMI-routed on Windows), not a plain
+// child_process.spawn — a plain spawn is still a descendant of this process in
+// the Windows process tree even with detached:true, so desktop/src/server.ts's
+// stopServer() (`taskkill /pid <web server pid> /T /F`, run on every app quit/
+// restart) killed the gate proxy right along with the web server. WMI-routing
+// makes the new process a child of WmiPrvSE.exe instead, so it now survives an
+// app restart the same way native tunnels already do.
 function ensureNativeGateRunning() {
   fs.mkdirSync(RUNTIME_AUTH_GATE_DIR, { recursive: true });
   if (nativeGateRunning()) return;
-  const logFd = fs.openSync(NATIVE_GATE_LOG_FILE, 'a');
-  const env = Object.assign({}, process.env, { AUTH_GATE_PORT: String(getGatePort()) });
-  const proc = spawn(process.execPath, [AUTH_GATE_PROXY_SCRIPT], {
-    detached: true,
-    stdio: ['ignore', logFd, logFd],
-    env,
+  const pid = spawnDetached(process.execPath, [AUTH_GATE_PROXY_SCRIPT], {
+    env: { AUTH_GATE_PORT: String(getGatePort()), TUNNEL_ROOT, TUNNEL_DATA_DIR },
+    logFile: NATIVE_GATE_LOG_FILE,
   });
-  proc.unref();
-  fs.closeSync(logFd);
-  fs.writeFileSync(NATIVE_GATE_PID_FILE, String(proc.pid));
+  fs.writeFileSync(NATIVE_GATE_PID_FILE, String(pid));
 }
 
 function reloadNativeGate() {
@@ -369,7 +373,10 @@ function stopNativeGateIfIdle() {
   }
   if (anyEnabled) return;
   const pid = parseInt(fs.readFileSync(NATIVE_GATE_PID_FILE, 'utf8').trim(), 10);
-  if (Number.isFinite(pid)) { try { process.kill(pid); } catch {} }
+  // killDetached, not a bare process.kill: on Windows the recorded pid is the
+  // intermediate WMI-launched cmd.exe (see ensureNativeGateRunning), so a
+  // plain kill would leave the real proxy process running orphaned.
+  if (Number.isFinite(pid)) killDetached(pid);
   try { fs.unlinkSync(NATIVE_GATE_PID_FILE); } catch {}
 }
 
@@ -513,6 +520,8 @@ module.exports = {
   rewriteServiceForHostname,
   getGatePort,
   getGateServicePort,
+  isGateRunning,
+  ensureGateRunning,
   nativeGateRunning,
   ensureNativeGateRunning,
   reloadNativeGate,

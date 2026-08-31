@@ -32,9 +32,16 @@ function readUpdateStatus(dataDir) {
 }
 
 // Merges `update` over the current status (so callers only pass the fields
-// that changed) and stamps `at` with the current time.
+// that changed) and stamps `at` with the current time. A state change away
+// from 'error' clears any stale `message` left over from a previous failure
+// unless the caller explicitly passes a new one — otherwise an old error
+// (e.g. a stale replayed install request) keeps showing in the UI/tray
+// through every later checking/downloading/up-to-date transition.
 function writeUpdateStatus(dataDir, update) {
   const next = { ...readUpdateStatus(dataDir), ...update, at: Date.now() };
+  if (update.state && update.state !== 'error' && !('message' in update)) {
+    next.message = null;
+  }
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(path.join(dataDir, STATUS_FILE), JSON.stringify(next, null, 2) + '\n');
   return next;
@@ -46,6 +53,13 @@ function readUpdateRequest(dataDir) {
   } catch {
     return null;
   }
+}
+
+// Removes update-request.json once a request has been handled (or discarded
+// as stale) so it doesn't linger on disk as a request future app launches
+// have to keep re-recognizing-and-ignoring.
+function clearUpdateRequest(dataDir) {
+  try { fs.unlinkSync(path.join(dataDir, REQUEST_FILE)); } catch {}
 }
 
 // action: 'check' | 'install'
@@ -64,4 +78,5 @@ module.exports = {
   writeUpdateStatus,
   readUpdateRequest,
   writeUpdateRequest,
+  clearUpdateRequest,
 };
