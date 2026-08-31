@@ -6,6 +6,7 @@ const ui = require('./ui-helper');
 const readline = require('readline');
 const { TUNNELS_DIR, getEffectiveMode, generateLaunchers, nativeStart, getRuntimeDir } = require('./runtime');
 const { findCloudflared, ensureCloudflared } = require('./cloudflared-bin');
+const { routeDns } = require('./dns-route-core');
 
 if (process.env.CI === '1' || !process.stdin.isTTY) {
   console.error('interactive mode required, run from terminal');
@@ -242,14 +243,22 @@ ingress:
   ui.subStep('Created: config.yml', 'success');
   console.log(`   ${ui.c.dim}Runtime mode: ${mode}${ui.c.reset}`);
 
-  // Setup DNS
+  // Setup DNS — routes via the Cloudflare API into the zone that actually
+  // owns `domain` (Settings › Domains) when a token is configured; falls
+  // back to `cloudflared tunnel route dns` (zone tied to cert.pem) otherwise.
   ui.step(6, 7, `${ui.icons.dns} Setting up DNS...`);
   console.log(`   ${ui.c.dim}Domain: ${domain}${ui.c.reset}`);
-  const dnsResult = exec(`${cmd} tunnel route dns ${tunnelId} ${domain}`, 'Setup DNS route', true);
-  if (dnsResult) {
+  const dnsResult = await routeDns(tunnelName, domain, {
+    tunnelsDir: TUNNELS_DIR,
+    tunnelId,
+    runCloudflaredRouteDns: () => execSync(`${cmd} tunnel route dns ${tunnelId} ${domain}`, { stdio: 'pipe', encoding: 'utf8' })
+  });
+  if (dnsResult.ok) {
     ui.subStep(`DNS route created for ${domain}`, 'success');
+    console.log(`   ${ui.c.dim}${dnsResult.message.split('\n')[0]}${ui.c.reset}`);
   } else {
     ui.warning('DNS route setup may have failed');
+    console.log(`   ${ui.c.dim}${dnsResult.message}${ui.c.reset}`);
     ui.tip(`You can add it manually: cloudflared tunnel route dns ${tunnelId} ${domain}`);
   }
 

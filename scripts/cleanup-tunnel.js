@@ -352,26 +352,38 @@ async function main() {
         // ลบแต่ละ domain ทีละตัว
         const { deleteDnsRecord, listDnsRecords } = require('./cloudflare-api');
         const settingsStore = require('./settings-store');
+        const domains = require('./domains');
         const apiToken = settingsStore.getCloudflareToken();
-        const zoneId = settingsStore.getZoneId();
 
-        if (!apiToken || !zoneId) {
-          ui.warning('Missing Cloudflare API token or zone ID');
-          ui.tip('Set these in Settings (or .env) to enable automatic CNAME deletion');
+        if (!apiToken) {
+          ui.warning('Missing Cloudflare API token');
+          ui.tip('Set it in Settings (or .env) to enable automatic CNAME deletion');
           console.log('');
           ui.box('Manual Deletion Required', [
             'Please delete CNAME records manually:',
             `${ui.c.cyan}https://dash.cloudflare.com/ → DNS → Records${ui.c.reset}`,
             ...domainsToDelete.map(d => `• ${d}`)
           ]);
-          errors.push(`Could not delete CNAMEs (missing .env): ${domainsToDelete.join(', ')}`);
+          errors.push(`Could not delete CNAMEs (missing API token): ${domainsToDelete.join(', ')}`);
         } else {
-          // ดึงรายการ DNS records
-          const allRecords = await listDnsRecords(zoneId, apiToken);
+          // Resolve each domain's zone independently — a hostname on a 2nd+
+          // domain lives in a different zone than settingsStore.getZoneId().
+          // Cache fetched records per zone so a fleet of hostnames sharing a
+          // zone only fetches it once.
           let deletedCount = 0;
+          const recordsByZone = new Map();
 
-          // ลบ CNAME ที่ตรงกับ domains ที่เราต้องการ
           for (const domain of domainsToDelete) {
+            const { zoneId } = domains.resolveZone(domain);
+            if (!zoneId) {
+              ui.subStep(`Could not resolve Cloudflare zone for: ${domain}`, 'error');
+              errors.push(`Could not resolve zone for ${domain} (add it in Settings › Domains)`);
+              continue;
+            }
+            if (!recordsByZone.has(zoneId)) {
+              recordsByZone.set(zoneId, await listDnsRecords(zoneId, apiToken));
+            }
+            const allRecords = recordsByZone.get(zoneId);
             const record = allRecords.find(r =>
               r.type === 'CNAME' &&
               r.name === domain &&

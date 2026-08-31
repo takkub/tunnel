@@ -19,14 +19,14 @@ const path = require('path');
 function makeTempRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delete-tunnel-test-root-'));
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
-  for (const f of ['delete-tunnel.js', 'runtime.js', 'cloudflared-bin.js', 'ui-helper.js', 'settings-store.js']) {
+  for (const f of ['delete-tunnel.js', 'runtime.js', 'cloudflared-bin.js', 'ui-helper.js', 'settings-store.js', 'domains.js']) {
     fs.copyFileSync(path.join(__dirname, '..', f), path.join(dir, 'scripts', f));
   }
   return dir;
 }
 
 function loadModule(root, dataDir, env = {}) {
-  const files = ['delete-tunnel.js', 'runtime.js', 'cloudflared-bin.js', 'ui-helper.js', 'settings-store.js'];
+  const files = ['delete-tunnel.js', 'runtime.js', 'cloudflared-bin.js', 'ui-helper.js', 'settings-store.js', 'domains.js'];
   for (const f of files) {
     delete require.cache[require.resolve(path.join(root, 'scripts', f))];
   }

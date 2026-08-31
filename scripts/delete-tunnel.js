@@ -10,6 +10,7 @@ const ui = require('./ui-helper');
 const runtime = require('./runtime');
 const cloudflaredBin = require('./cloudflared-bin');
 const settingsStore = require('./settings-store');
+const domains = require('./domains');
 try { require('dotenv').config({ path: path.join(runtime.DATA_DIR, '.env') }); } catch {}
 
 // Bounded so a hung Docker Desktop / cloudflared login prompt / offline
@@ -149,13 +150,20 @@ function cfRequest(method, urlPath) {
 
 async function deleteDnsRecords(hostnames) {
   const token = settingsStore.getCloudflareToken();
-  const zoneId = settingsStore.getZoneId();
-  if (!token || !zoneId) {
-    console.warn('[WARN] Missing Cloudflare API token or zone ID, skipping DNS deletion');
+  if (!token) {
+    console.warn('[WARN] Missing Cloudflare API token, skipping DNS deletion');
     return [];
   }
   const failed = [];
   for (const hostname of hostnames) {
+    // Resolve per-hostname, not a single fixed settingsStore.getZoneId() —
+    // a hostname on a 2nd+ domain lives in a different zone (see domains.js).
+    const { zoneId } = domains.resolveZone(hostname);
+    if (!zoneId) {
+      console.warn(`[WARN] Could not resolve Cloudflare zone for ${hostname} (add its domain in Settings › Domains), skipping DNS deletion`);
+      failed.push(`DNS ${hostname}: zone not resolved`);
+      continue;
+    }
     try {
       const res = await cfRequest('GET', `/client/v4/zones/${zoneId}/dns_records?name=${hostname}`);
       if (!res || !res.success || !res.result?.length) {
