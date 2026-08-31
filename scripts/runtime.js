@@ -250,13 +250,15 @@ function nativeRunningDetail(name, processes) {
   const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (fs.existsSync(pidFile)) {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-    try { process.kill(pid, 0); return { running: true, pid, foreign: false }; } catch {}
+    if (isAlive(pid)) return { running: true, pid, foreign: false };
     // stale .pid — fall through to process scan
   }
   if (!processes || !processes.length) return { running: false, pid: null, foreign: false };
-  const fragment = path.join('tunnels', name, 'config.yml');   // OS-native separators
-  const fragmentFwd = `tunnels/${name}/config.yml`;             // forward-slash form (launchers)
-  const match = processes.find(p => p.cmdline.includes(fragment) || p.cmdline.includes(fragmentFwd));
+  // Normalize both sides to forward slashes so this matches regardless of which
+  // separator style the cmdline happens to use — OS-native (backslashes on
+  // win32) or a forward-slash launcher script — without hardcoding either form.
+  const fragment = `tunnels/${name}/config.yml`;
+  const match = processes.find(p => p.cmdline.replace(/\\/g, '/').includes(fragment));
   if (!match) return { running: false, pid: null, foreign: false };
   return { running: true, pid: Number.isFinite(match.pid) ? match.pid : null, foreign: true };
 }
@@ -420,8 +422,29 @@ function nativeStart(name) {
   return pid;
 }
 
+// A SIGKILLed child lingers as a zombie (kernel keeps its PID slot) until this
+// process reaps it, and reaping only happens once Node's event loop runs a
+// tick — which the synchronous, thread-blocking sleepSync() polling below
+// never yields for. process.kill(pid, 0) still reports a zombie as "alive",
+// so without this check killDetached() spins for its whole deadline against
+// a process that already fully exited — confirmed via a Linux/WSL repro:
+// isAlive() stayed true indefinitely (ps STAT 'Z') until control returned to
+// the event loop, which the busy-wait loop by definition never does. A
+// zombie has already terminated (holds no fds, does nothing) so treating it
+// as dead here is correct, not just a workaround. Windows has no zombie state.
+function isZombie(pid) {
+  if (process.platform === 'win32') return false;
+  try {
+    const r = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8', timeout: 3000 });
+    return (r.stdout || '').trim().startsWith('Z');
+  } catch {
+    return false;
+  }
+}
+
 function isAlive(pid) {
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try { process.kill(pid, 0); } catch { return false; }
+  return !isZombie(pid);
 }
 
 function sleepSync(ms) {
@@ -495,12 +518,7 @@ function nativeStatus(name) {
   const pidFile = path.join(getRuntimeDir(name), '.pid');
   if (!fs.existsSync(pidFile)) return false;
   const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  return isAlive(pid);
 }
 
 // Generate per-tunnel start launchers in tunnels/<name>/
