@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ExposeOnlineForm from '@/components/ExposeOnlineForm'
+import SidebarUpdateBadge, { UpdateDot, useUpdateStatus } from '@/components/SidebarUpdateBadge'
 
 interface WebStatus {
   port: number
@@ -178,6 +179,15 @@ export function ClientLayout({ children, version }: { children: React.ReactNode;
   const toggleBtnRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const wasOpenRef = useRef(false)
+  const [desktopMode, setDesktopMode] = useState(false)
+  const updateStatus = useUpdateStatus(desktopMode)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => setDesktopMode(Boolean(data?.runtime?.desktopMode)))
+      .catch(() => { /* settings API not ready */ })
+  }, [])
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -241,12 +251,16 @@ export function ClientLayout({ children, version }: { children: React.ReactNode;
         style={{ background: '#0c0c0e' }}>
         {/* Logo */}
         <div className="h-14 flex items-center px-4 gap-3 border-b border-zinc-800/60 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center shadow-glow-orange flex-shrink-0">
+          <div className="relative w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center shadow-glow-orange flex-shrink-0">
             <IconTunnel className="w-4 h-4 text-white" />
+            <UpdateDot status={updateStatus} />
           </div>
           <div className="min-w-0">
             <div className="font-semibold text-zinc-100 text-sm tracking-tight">Tunnel Manager</div>
-            <div className="text-[10px] text-zinc-500 leading-none">v{version}</div>
+            <div className="inline-flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 leading-none">v{version}</span>
+              <SidebarUpdateBadge status={updateStatus} />
+            </div>
           </div>
         </div>
 
