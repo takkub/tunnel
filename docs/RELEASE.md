@@ -55,8 +55,7 @@ Workflow ปัจจุบัน build ได้แต่**ไม่ได้ s
 ไม่มี secret พวกนี้ → electron-builder จะ build แบบ unsigned พร้อม warning (ไม่ fail build)
 
 นอกจาก secrets ข้างบน ตอนพร้อม sign จริงต้องแก้ `desktop/package.json`'s `build.mac`
-ด้วย (ปัจจุบันตั้งใจ force unsigned):
-- ลบ `"identity": null` ออก (ค่านี้บังคับ unsigned แม้มี cert ในเครื่อง/CI)
+ด้วย:
 - เพิ่ม `"hardenedRuntime": true` — required สำหรับ notarization
 - เพิ่ม entitlements file (`build/entitlements.mac.plist`) ถ้า runtime ต้องการ permission พิเศษ (network, etc.)
 - electron-builder จะ notarize อัตโนมัติเมื่อเห็น `APPLE_ID` +
@@ -75,6 +74,17 @@ and can't be opened. You should move it to the Trash.` (ไม่ใช่ไฟ
 เป็นเพราะไม่มี signature/notarization + quarantine attribute จาก browser)
 Windows เจอ SmartScreen เตือนคล้ายกัน วิธีแก้ทั้งสอง OS อยู่ที่
 [`README.md` § ติดตั้งบน macOS](../README.md#ติดตั้งบน-macos)
+
+**Apple Silicon เฉพาะ (v1.1.15+ แก้แล้ว):** ก่อน v1.1.15 การ `xattr -cr`
+อย่างเดียวไม่พอบน arm64 — macOS ปฏิเสธรัน binary ที่ไม่มี signature เลย
+แม้จะล้าง quarantine attribute แล้วก็ตาม (ต่างจาก Intel ที่ `xattr -cr` พอ)
+release **≤ v1.1.14** ต้อง ad-hoc sign เพิ่มเองด้วย
+`codesign --force --deep --sign - "/Applications/Tunnel Manager.app"`
+(ดู README) ตั้งแต่ v1.1.15 `desktop/scripts/afterPack-adhoc-sign.js`
+(wired ผ่าน `build.afterPack` ใน `desktop/package.json`) รัน ad-hoc sign
+ให้อัตโนมัติทุก mac build แล้ว เหลือแค่ `xattr -cr` เท่านั้น — ad-hoc sign
+ไม่ใช่ signing จริง (ไม่มี Developer ID, ไม่ notarize) แค่พอผ่านเงื่อนไข
+"ต้องมี signature" ของ arm64 macOS
 
 **Checklist:** release notes ของทุกเวอร์ชัน (GitHub Release ของ tag นั้น) ต้อง
 แปะลิงก์คำแนะนำนี้ไว้ จนกว่าจะมี code signing/notarization จริง (ดู checklist

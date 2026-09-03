@@ -66,9 +66,9 @@
         }
       ],
       "icon": "build/icon.png",
-      "category": "public.app-category.developer-tools",
-      "identity": null
+      "category": "public.app-category.developer-tools"
     },
+    "afterPack": "scripts/afterPack-adhoc-sign.js",
     "publish": [
       {
         "provider": "github",
