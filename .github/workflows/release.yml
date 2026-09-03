@@ -65,6 +65,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist -- --publish always
 
+      # Guards against a silent regression of the ad-hoc signing fix in
+      # v1.1.15 (afterPack-adhoc-sign.js) — if the .app ships unsigned or
+      # the signature is broken, fail the build loudly instead of shipping
+      # a "damaged" app to users.
+      - name: Verify mac signature
+        if: runner.os == 'macOS'
+        working-directory: desktop
+        run: |
+          apps=$(find dist-artifacts -maxdepth 2 -name "*.app" -type d)
+          if [ -z "$apps" ]; then
+            echo "::error::No .app bundle found under dist-artifacts — expected at least one"
+            exit 1
+          fi
+          status=0
+          while IFS= read -r app; do
+            echo "Verifying: $app"
+            codesign --verify --deep --strict --verbose=2 "$app" || status=1
+          done <<< "$apps"
+          exit $status
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:

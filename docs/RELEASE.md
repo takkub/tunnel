@@ -86,6 +86,12 @@ release **≤ v1.1.14** ต้อง ad-hoc sign เพิ่มเองด้�
 ไม่ใช่ signing จริง (ไม่มี Developer ID, ไม่ notarize) แค่พอผ่านเงื่อนไข
 "ต้องมี signature" ของ arm64 macOS
 
+**CI verify (v1.1.16+):** `.github/workflows/release.yml` มี step "Verify mac
+signature" รันหลัง build ทุก mac target — เช็คด้วย
+`codesign --verify --deep --strict` ทุก `.app` ที่ build ออกมา ถ้า ad-hoc
+sign หลุด/พังใน build ไหน workflow จะ fail ให้เห็นทันทีแทนที่จะไปโผล่เป็น
+"damaged" ที่เครื่องผู้ใช้
+
 **Checklist:** release notes ของทุกเวอร์ชัน (GitHub Release ของ tag นั้น) ต้อง
 แปะลิงก์คำแนะนำนี้ไว้ จนกว่าจะมี code signing/notarization จริง (ดู checklist
 ด้านบน) — ไม่งั้นผู้ใช้ที่ไม่รู้จะคิดว่าไฟล์เสียแล้วเลิกใช้
