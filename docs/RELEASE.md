@@ -54,6 +54,20 @@ Workflow ปัจจุบัน build ได้แต่**ไม่ได้ s
 
 ไม่มี secret พวกนี้ → electron-builder จะ build แบบ unsigned พร้อม warning (ไม่ fail build)
 
+นอกจาก secrets ข้างบน ตอนพร้อม sign จริงต้องแก้ `desktop/package.json`'s `build.mac`
+ด้วย (ปัจจุบันตั้งใจ force unsigned):
+- ลบ `"identity": null` ออก (ค่านี้บังคับ unsigned แม้มี cert ในเครื่อง/CI)
+- เพิ่ม `"hardenedRuntime": true` — required สำหรับ notarization
+- เพิ่ม entitlements file (`build/entitlements.mac.plist`) ถ้า runtime ต้องการ permission พิเศษ (network, etc.)
+- electron-builder จะ notarize อัตโนมัติเมื่อเห็น `APPLE_ID` +
+  `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID` ครบ (ใช้ `notarytool` ภายใน
+  ไม่ต้องเพิ่ม step เอง) — Windows ฝั่ง `CSC_LINK`/`CSC_KEY_PASSWORD` ก็ sign
+  พอมี cert โดยไม่ต้องแก้ `build.win` เพิ่ม
+
+สรุป long-term fix: Apple Developer ID cert (`CSC_LINK`+`CSC_KEY_PASSWORD`) +
+Apple ID สำหรับ notarytool (`APPLE_ID`+`APPLE_APP_SPECIFIC_PASSWORD`+`APPLE_TEAM_ID`)
++ เปิด `hardenedRuntime` ใน `build.mac` — ยังไม่ implement ตอนนี้ แค่ document ไว้
+
 ### อาการที่ผู้ใช้เจอ + workaround
 
 Unsigned build → macOS Gatekeeper บล็อกด้วยข้อความ `"Tunnel Manager" is damaged
