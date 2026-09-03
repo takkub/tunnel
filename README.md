@@ -20,14 +20,22 @@
    ```bash
    xattr -cr "/Applications/Tunnel Manager.app"
    ```
-4. ถ้าเปิดแล้วยังถูกบล็อกอยู่ ให้ไปที่ **System Settings → Privacy & Security → เลื่อนลงหา Tunnel Manager → Open Anyway** (macOS 15 ขึ้นไปตัดทางลัด right-click → Open ออกแล้ว ต้องเข้าหน้านี้เท่านั้น)
+4. เปิดแอป — ถ้าเจอ dialog ข้อความประมาณนี้ (macOS Sequoia 15 ขึ้นไป):
+
+   > **Apple could not verify "Tunnel Manager" is free of malware that may harm your Mac or compromise your privacy.**
+   > `[Move to Trash]` `[Done]`
+
+   คำว่า "malware" **ไม่ได้แปลว่าเจอไวรัส** — ข้อความนี้ขึ้นกับแอปทุกตัวที่ยังไม่ได้ผ่าน Apple notarization (แอปนี้ยังไม่ notarize จริง ดู [`docs/RELEASE.md`](docs/RELEASE.md#️-todo-code-signing--notarization)) แปลว่า "Apple ยังไม่ได้ตรวจสอบ" ไม่ใช่ "ตรวจสอบแล้วเจอปัญหา" วิธีเปิดต่อ:
+   1. กด **Done** (**ห้ามกด Move to Trash**)
+   2. ไปที่ **System Settings → Privacy & Security** เลื่อนลงล่างสุด จะเห็นข้อความ `"Tunnel Manager" was blocked to protect your Mac` → กด **Open Anyway**
+   3. ยืนยันอีกครั้ง + ใส่รหัสเครื่อง (Touch ID/password) → เปิดได้ปกติ **ถาวร** ตั้งแต่ครั้งนี้ไป ไม่ต้องทำซ้ำทุกครั้งที่เปิด
 5. **Apple Silicon (M1/M2/M3/M4) เท่านั้น** — ถ้าทำครบข้อ 3-4 แล้วยังขึ้น `damaged` อยู่ (พบใน release **≤ v1.1.14**) ให้ ad-hoc sign เองอีกชั้นด้วย:
    ```bash
    codesign --force --deep --sign - "/Applications/Tunnel Manager.app"
    ```
    สาเหตุ: build เก่าไม่มี signature เลย (ไม่ใช่แค่ quarantine) — arm64 macOS ปฏิเสธรัน binary ที่ไม่มี signature แม้จะ `xattr -cr` แล้วก็ตาม คำสั่งข้างบนคือ sign เองแบบ ad-hoc (ไม่ต้องมี cert) ให้ผ่านเงื่อนไขนี้ ตั้งแต่ v1.1.15 เป็นต้นไป build เองก็ ad-hoc sign ให้แล้วในขั้นตอน release เหลือแค่ข้อ 3 (`xattr -cr`) เท่านั้น
 
-> ทำไมขึ้น `"Tunnel Manager" is damaged and can't be opened. You should move it to the Trash.` — เพราะแอปยังไม่ได้ sign ด้วย Apple Developer ID cert จริง/notarize (ดูสถานะที่ [`docs/RELEASE.md`](docs/RELEASE.md#️-todo-code-signing--notarization)) ไม่ใช่ไฟล์เสียจริง ไฟล์ที่โหลดผ่านเบราว์เซอร์จะติด quarantine attribute ที่ทำให้ Gatekeeper ปฏิเสธไฟล์ที่ไม่มีลายเซ็นก่อนเสมอ คำสั่ง `xattr -cr` ข้างบนคือการล้าง attribute นั้นออก
+> **นี่คือ dialog คนละตัวกับ** `"Tunnel Manager" is damaged and can't be opened. You should move it to the Trash.` (ข้อ 5 ด้านบน) — dialog "damaged" เจอเฉพาะ release **≤ v1.1.14** บน Apple Silicon เพราะ build เก่าไม่มี signature เลย ต้อง `codesign` เพิ่มเอง ส่วน dialog "malware/could not verify" (ข้อ 4) เป็นข้อความมาตรฐานของ macOS สำหรับแอปที่ signed แต่ยังไม่ notarize — เจอได้ทุกเครื่อง ทุก release ตราบใดที่ยังไม่มี Developer ID + notarization จริง แก้ด้วย Open Anyway ในข้อ 4 เท่านั้น ไม่ต้องรัน `codesign` เอง ไฟล์ที่โหลดผ่านเบราว์เซอร์จะติด quarantine attribute ที่ทำให้ Gatekeeper ตรวจเข้มขึ้นเสมอ คำสั่ง `xattr -cr` ในข้อ 3 คือการล้าง attribute นั้นออกก่อน
 
 Windows จะเจอ **SmartScreen** เตือนลักษณะเดียวกัน (unsigned `.exe`) → กด **More info → Run anyway**
 

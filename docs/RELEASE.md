@@ -69,11 +69,24 @@ Apple ID สำหรับ notarytool (`APPLE_ID`+`APPLE_APP_SPECIFIC_PASSWORD`
 
 ### อาการที่ผู้ใช้เจอ + workaround
 
-Unsigned build → macOS Gatekeeper บล็อกด้วยข้อความ `"Tunnel Manager" is damaged
-and can't be opened. You should move it to the Trash.` (ไม่ใช่ไฟล์เสียจริง —
-เป็นเพราะไม่มี signature/notarization + quarantine attribute จาก browser)
-Windows เจอ SmartScreen เตือนคล้ายกัน วิธีแก้ทั้งสอง OS อยู่ที่
+Unsigned/unnotarized build → macOS Gatekeeper บล็อก 2 แบบ ขึ้นกับ macOS
+version และสถานะ signature ของ build นั้น (ไม่ใช่ไฟล์เสียหรือมี malware จริง
+ทั้งคู่ — เป็นเพราะไม่มี Developer ID signature/notarization จริง +
+quarantine attribute จาก browser) Windows เจอ SmartScreen เตือนคล้ายกัน
+วิธีแก้ทั้งสอง OS อยู่ที่
 [`README.md` § ติดตั้งบน macOS](../README.md#ติดตั้งบน-macos)
+
+**macOS Sequoia (15+), ทุก release ตราบใดที่ยังไม่ notarize จริง:** dialog
+ขึ้นว่า `Apple could not verify "Tunnel Manager" is free of malware that may
+harm your Mac or compromise your privacy.` พร้อมปุ่ม `Move to Trash` /
+`Done` — คำว่า "malware" ในข้อความนี้แปลว่า **"Apple ยังไม่ได้ตรวจสอบ"**
+ไม่ใช่ "ตรวจสอบแล้วเจอปัญหา" เป็น standard wording ของ Sequoia สำหรับแอปที่
+signed แต่ยังไม่ notarize (คนละเคสกับ "damaged" ด้านล่าง) มี user report จริง
+จาก v1.1.15 ว่าเห็นคำว่า malware แล้วตกใจคิดว่าติดไวรัส — วิธีแก้: กด **Done**
+(ห้าม Move to Trash) → **System Settings → Privacy & Security** เลื่อนลง
+ล่างสุดหาข้อความ `was blocked to protect your Mac` → **Open Anyway** → ยืนยัน
++ ใส่รหัสเครื่อง → เปิดได้ถาวรตั้งแต่ครั้งนั้นไป ทำครั้งเดียวจบ ไม่ต้อง
+`codesign` เอง
 
 **Apple Silicon เฉพาะ (v1.1.15+ แก้แล้ว):** ก่อน v1.1.15 การ `xattr -cr`
 อย่างเดียวไม่พอบน arm64 — macOS ปฏิเสธรัน binary ที่ไม่มี signature เลย
